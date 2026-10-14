@@ -1,0 +1,232 @@
+# WynDoze-InfoScanOverload
+
+A self-hosted agent and dashboard for endpoint inventory. Lightweight agents
+collect local telemetry. A loopback server classifies it with MITRE ATT&CK
+rules. An analyst works the findings through a triage inbox.
+
+Built and maintained by **CGFixIT**. Targets **Python 3.12 / 3.13**.
+
+---
+
+## What it does
+
+- **Agents** run on each endpoint (backup server, proxy, repository, DC,
+  jumpbox, workstation), collect read-only telemetry, and upload it over HTTPS
+  with a bearer token — or defer to an **encrypted local bundle** when the
+  machine is isolated or the server is unreachable.
+- **The server** (FastAPI + SQLite) ingests reports, runs a **declarative YAML
+  rules engine** against each one, and records findings. A dark-themed dashboard
+  gives you a **Triage Inbox**, a **Timeline**, an **Endpoints** registry, and a
+  **Summary** report, plus exports to **CSV / Markdown / JSON / Microsoft
+  Sentinel** (NDJSON).
+- Findings carry a lifecycle: `triage → flagged / archived / suppressed`, and
+  are deduplicated per (host, rule, evidence) so recurring conditions bump a
+  `seen_count` instead of spamming the inbox.
+
+### What it deliberately does **not** do
+
+- No file *contents* are ever read — only metadata (names, ports, service
+  states, package names, admin account names).
+- No credentials, tokens, or secrets are collected.
+- No active network scanning — only local listening-socket state.
+- No outbound cloud calls except the single HTTPS upload to *your* server.
+
+---
+
+## Security posture
+
+| Concern | Design |
+|---|---|
+| Agent → server auth | Bearer token (`RECON_INGEST_TOKEN`), constant-time compared |
+| Dashboard auth | HTTP Basic (`RECON_DASHBOARD_PASSWORD`); front with SSO/proxy in prod |
+| Data at rest (deferred) | Fernet encrypted bundles. The Windows task stores the key in an ACL'd env file, not Machine environment. |
+| Stored XSS | All telemetry HTML-escaped before rendering |
+| Command execution | `subprocess` list-args only, never `shell=True`. Hard timeouts. |
+| Rule packs | Pure data via `yaml.safe_load`. Unknown severity fails the pack load. |
+| Transport | HTTPS, or HTTP only to `127.0.0.1` or `::1`. `httpx` ignores proxy env. |
+| Ingest size | Bodies larger than 8 MiB are rejected with 413 before SQLite writes. |
+| Process command lines | Not collected. The `cmdline` field stays null. |
+
+If `RECON_INGEST_TOKEN` or `RECON_DASHBOARD_PASSWORD` is unset or empty, that
+endpoint returns 401. The server logs a warning at startup. There is no
+unauthenticated dev mode. Set `RECON_AGENT_DISABLE=1` to exit the agent before
+collection or upload. `RECON_HOST` accepts only `127.0.0.1` and `::1`.
+
+---
+
+## Install
+
+```bash
+# From the project root, using uv (recommended):
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install -e ".[server,dev]"     # server + dev tooling
+# Agents only need the base install:
+uv pip install .
+```
+
+On Windows 10 or Windows 11, `pyproject.toml` stays the source of truth.
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[server,dev]"
+```
+
+`requirements.txt` and `constraints.txt` repeat those floors. They are not a lock.
+
+Two console scripts are installed:
+
+- `WynDoze-InfoScanOverload-agent` — the endpoint agent CLI
+- `WynDoze-InfoScanOverload-server` — the dashboard server (uvicorn wrapper)
+
+---
+
+## Quick start
+
+**1. Start the server** on loopback. Both secrets are required:
+
+```bash
+export RECON_INGEST_TOKEN=devtoken
+export RECON_DASHBOARD_PASSWORD=devpassword
+WynDoze-InfoScanOverload-server                     # listens on 127.0.0.1:8000
+# open http://127.0.0.1:8000/ and sign in as admin
+```
+
+**2. Run an agent scan** against it:
+
+```bash
+export RECON_AGENT_TOKEN=devtoken           # any value in dev
+WynDoze-InfoScanOverload-agent scan --server-url http://127.0.0.1:8000/api/scans --role backup_server
+```
+
+**3. Work findings** in the Triage Inbox at `/triage`.
+
+### Isolated / air-gapped machines
+
+```bash
+# On the isolated host — write an encrypted bundle, no network:
+export RECON_AGENT_ENCRYPTION_KEY=$(WynDoze-InfoScanOverload-agent gen-key)   # store this key safely
+WynDoze-InfoScanOverload-agent bundle --role repository --cache-dir ./out
+
+# Move ./out/*.WynDoze-InfoScanOverload-bundle to a jumpbox with the same key, then:
+export RECON_AGENT_ENCRYPTION_KEY=<same key>
+export RECON_AGENT_TOKEN=<server token>
+WynDoze-InfoScanOverload-agent replay --server-url https://recon.internal/api/scans --cache-dir ./out
+```
+
+### Evaluate a report locally (no server)
+
+```bash
+WynDoze-InfoScanOverload-agent scan --no-upload --output-json report.json --role backup_server
+WynDoze-InfoScanOverload-agent evaluate-local report.json          # prints findings as JSON
+```
+
+---
+
+## Configuration
+
+All configuration is environment-driven (Pydantic Settings).
+
+### Agent (`RECON_AGENT_*`)
+
+| Variable | Purpose |
+|---|---|
+| `RECON_AGENT_TOKEN` | Bearer token presented to the server |
+| `RECON_AGENT_ENCRYPTION_KEY` | Fernet key for deferred/isolated bundles |
+| `RECON_AGENT_DISABLE` | Set to `1` to exit before collection or upload |
+
+### Server (`RECON_*`)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `RECON_DB_PATH` | `WynDoze-InfoScanOverload.sqlite3` | SQLite database path |
+| `RECON_INGEST_TOKEN` | *(unset)* | Required bearer token for `/api/scans` |
+| `RECON_DASHBOARD_USER` | `admin` | Basic-auth username |
+| `RECON_DASHBOARD_PASSWORD` | *(unset)* | Required basic-auth password. Unset returns 401. |
+| `RECON_RULES_PATH` | *(bundled)* | Override rule pack YAML |
+| `RECON_HOST` / `RECON_PORT` | `127.0.0.1` / `8000` | Bind address. Only `127.0.0.1` and `::1` are accepted. |
+
+---
+
+## Rules engine
+
+Rules are declarative YAML. The bundled pack (`windows-default`, v1.0) ships
+**17 rules** across **7 rule kinds**. Command lines stay empty unless
+`--cmdline` is set, and then they are stored as Fernet tokens.
+
+Supported rule kinds:
+
+| Kind | Fires when |
+|---|---|
+| `listening_port` | A listed port is listening locally |
+| `process_name` | A process matching a listed name is running |
+| `service_present` | A service matching a substring exists (optional state filter) |
+| `software_present` | Installed software matches a substring |
+| `local_admin_unexpected` | A local admin not on the allow-list is present |
+| `missing_expected_service` | An expected service is absent |
+
+Every rule may declare `roles:` (scope to endpoint roles) and `technique:`
+(a MITRE ATT&CK id). Example:
+
+```yaml
+name: windows-default
+version: "1.0"
+rules:
+  - id: proc-credential-dumping
+    kind: process_name
+    title: Credential-dumping tool detected
+    severity: critical
+    technique: T1003
+    names: [mimikatz.exe, procdump.exe, secretsdump.py]
+```
+
+Point the server at a custom pack with `RECON_RULES_PATH=/path/to/pack.yaml`,
+or evaluate with `WynDoze-InfoScanOverload-agent evaluate-local report.json --rules pack.yaml`.
+
+---
+
+## Deployment
+
+See [`deploy/`](deploy/):
+
+- **Linux (systemd):** `deploy/systemd/WynDoze-InfoScanOverload-agent.{service,timer}` — a hardened
+  daily one-shot timer. Copy secrets to `/etc/recon/agent.env` (see
+  `deploy/agent.env.example`).
+- **Windows:** `deploy/windows/Install-ReconAgentTask.ps1` registers a daily
+  SYSTEM task when you run it. It copies the session token and key into
+  `C:\ProgramData\WynDoze-InfoScanOverload\agent.env` and locks that file to SYSTEM and
+  Administrators. This tree does not register the task for you.
+  The dashboard database defaults to `C:\ProgramData\WynDoze-InfoScanOverload\WynDoze-InfoScanOverload.sqlite3`.
+
+Operator guides: [user-guide.md](user-guide.md) and [feature.map.md](feature.map.md).
+
+Put the server behind a TLS-terminating reverse proxy in production.
+
+---
+
+## Development
+
+```bash
+ruff check src tests        # lint (ruff "ALL" ruleset)
+ruff format src tests       # format
+mypy src                    # strict type check
+pytest -q                   # unit + integration tests
+```
+
+Project layout:
+
+```
+src/wyndoze_infoscanoverload/
+├── core/         # domain: models, severity, MITRE catalog, rules engine
+│   └── rulepacks/  # bundled YAML rule packs
+├── agent/        # collectors, encrypted cache, uploader, Typer CLI
+└── server/       # FastAPI app, SQLite storage, HTML templates, exports
+```
+
+---
+
+## License / status
+
+Internal tool, provided as-is with no warranty. MITRE ATT&CK is a registered
+trademark of The MITRE Corporation.

@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+
+# Recon runtime artifacts
+*.sqlite3
+*.sqlite
+*.db
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+*.log
+*.WynDoze-InfoScanOverload-bundle
+WynDoze-InfoScanOverload-cache/
+last-scan.json
+sample-scan.json
+
+# Secrets — never commit
+.env
+.env.*
+agent.env
+*.key
+*.token
+
+# Local clutter
+.hypothesis/
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.stackdump

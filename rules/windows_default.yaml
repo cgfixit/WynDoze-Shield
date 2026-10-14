@@ -1,0 +1,240 @@
+# WynDoze-InfoScanOverload default rule pack.
+# Hand-written starter checks. Review and tune before relying on them.
+#
+# Each rule is pure data. Supported kinds: listening_port, process_name,
+# service_present, software_present, local_admin_unexpected,
+# missing_expected_service. Optional `roles` scopes a rule; `technique` maps to
+# MITRE ATT&CK.
+
+name: windows-default
+version: "1.0"
+
+rules:
+  # --- Exposed remote-access surface ---------------------------------------
+  - id: net-rdp-listener
+    title: RDP listener exposed
+    kind: listening_port
+    severity: medium
+    category: exposed_service
+    message: Remote Desktop (3389) is listening. Verify it is required and firewalled.
+    technique: T1021.001
+    ports: [3389]
+
+  - id: net-winrm-listener
+    title: WinRM listener exposed
+    kind: listening_port
+    severity: medium
+    category: exposed_service
+    message: WinRM (5985/5986) is listening. Restrict to management subnets.
+    technique: T1021.006
+    ports: [5985, 5986]
+
+  - id: net-legacy-cleartext
+    title: Legacy cleartext service exposed
+    kind: listening_port
+    severity: high
+    category: exposed_service
+    message: FTP/Telnet (21/23) listening. Cleartext protocols should not run on backup infra.
+    technique: T1071
+    ports: [21, 23]
+
+  - id: net-vnc-or-bindshell
+    title: VNC or common bind-shell port exposed
+    kind: listening_port
+    severity: high
+    category: exposed_service
+    message: Port 5900 (VNC) or 4444 (a common bind shell) is listening.
+    technique: T1219
+    ports: [5900, 4444]
+
+  - id: net-rdp-on-backup-server
+    title: RDP exposed on a backup server
+    kind: listening_port
+    severity: high
+    category: exposed_service
+    message: RDP is listening on a backup server. This is a high-value lateral-movement target.
+    technique: T1021.001
+    roles: [backup_server, repository]
+    ports: [3389]
+
+  # --- Dual-use / offensive tooling ----------------------------------------
+  - id: proc-credential-dumping
+    title: Credential-dumping tool observed
+    kind: process_name
+    severity: critical
+    category: dual_use_tool
+    message: A known credential-dumping tool is running.
+    technique: T1003
+    names:
+      - mimikatz.exe
+      - procdump.exe
+      - lsass.exe.dmp
+      - ntdsutil.exe
+      - lazagne.exe
+      - rubeus.exe
+      - sharphound.exe
+      - pwdump.exe
+      - wce.exe
+      - gsecdump.exe
+
+  - id: proc-malware-adware
+    title: Known malware, miner, or adware process observed
+    kind: process_name
+    severity: critical
+    category: malware
+    message: A process name associated with malware, coin miners, or bundled adware is running.
+    technique: T1496
+    names:
+      - xmrig.exe
+      - minergate.exe
+      - kmsauto.exe
+      - kmspico.exe
+      - autokms.exe
+      - remcos.exe
+      - nanocore.exe
+      - quasar.exe
+      - asyncrat.exe
+      - njrat.exe
+      - darkcomet.exe
+
+  - id: proc-lateral-movement
+    title: Lateral-movement / remote-exec tool observed
+    kind: process_name
+    severity: high
+    category: dual_use_tool
+    message: A remote-execution utility often used for lateral movement is running.
+    technique: T1570
+    names:
+      - psexec.exe
+      - psexesvc.exe
+      - paexec.exe
+      - wmic.exe
+
+  - id: proc-exfil-archiver
+    title: Archiver / exfiltration tool observed
+    kind: process_name
+    severity: medium
+    category: dual_use_tool
+    message: An archiving or sync tool sometimes abused for staging/exfiltration is running.
+    technique: T1560
+    names:
+      - rclone.exe
+      - winrar.exe
+      - 7z.exe
+      - megacmd.exe
+
+  - id: proc-remote-access-software
+    title: Third-party remote-access software observed
+    kind: process_name
+    severity: medium
+    category: remote_access
+    message: Third-party remote-access software is running. Confirm it is sanctioned.
+    technique: T1219
+    names:
+      - anydesk.exe
+      - teamviewer.exe
+      - screenconnect.exe
+      - ngrok.exe
+
+  - id: sw-remote-access-installed
+    title: Remote-access software is installed
+    kind: software_present
+    severity: medium
+    category: remote_access
+    message: Remote-access software is installed. Confirm it is sanctioned.
+    technique: T1219
+    substrings:
+      - tightvnc
+      - realvnc
+      - rustdesk
+      - anydesk
+      - teamviewer
+
+  - id: sw-pup-adware
+    title: Adware or risky bundled software is installed
+    kind: software_present
+    severity: medium
+    category: adware
+    message: Installed software often bundles adware or is a common piracy tool.
+    substrings:
+      - kmspico
+      - driver booster
+      - advanced systemcare
+      - segurazo
+      - spyhunter
+      - restoro
+      - reimage
+      - searchprotect
+
+  - id: sw-potentially-suspicious
+    title: Potentially suspicious software is installed
+    kind: software_present
+    severity: low
+    category: adware
+    message: This software is common for administration or file transfer and is also commonly used by attackers. It is not malware by itself.
+    substrings:
+      - utorrent
+      - bittorrent
+      - putty
+      - filezilla
+      - winscp
+      - mobaxterm
+      - bitvise
+      - cyberduck
+    names:
+      - kitty
+
+  - id: svc-remote-access
+    title: Remote-access service is present
+    kind: service_present
+    severity: medium
+    category: remote_access
+    message: A remote-access service is installed. Confirm it is sanctioned.
+    technique: T1219
+    substrings:
+      - teamviewer
+      - anydesk
+      - screenconnect
+      - rustdesk
+
+  - id: svc-risky-windows
+    title: Risky Windows service is running
+    kind: service_present
+    severity: high
+    category: posture
+    message: Remote Registry or Telnet is running. That exposes the host to lateral movement.
+    technique: T1021
+    states: [running]
+    substrings:
+      - remoteregistry
+      - tlntsvr
+
+  - id: cmd-suspicious-line
+    title: Suspicious command-line pattern observed
+    kind: cmdline_flag
+    severity: high
+    category: execution
+    message: An opted-in command line matched a high-signal pattern. The line itself is not stored in clear text.
+    technique: T1059.001
+    names:
+      - encoded-powershell
+      - invoke-expression
+      - credential-hive
+      - download-cradle
+      - execution-policy-bypass
+      - hidden-window
+      - certutil-download
+      - bitsadmin-transfer
+      - startup-run-key
+
+  - id: admin-unexpected-local-admin
+    title: Unexpected local administrator
+    kind: local_admin_unexpected
+    severity: high
+    category: accounts
+    message: A local administrator account is present that is not on the approved allow-list.
+    technique: T1078
+    allow:
+      - administrator
+      - domain admins
+      - root

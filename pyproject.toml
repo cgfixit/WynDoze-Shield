@@ -1,0 +1,97 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "WynDoze-InfoScanOverload"
+description = "WynDoze-InfoScanOverload endpoint telemetry scanner and dashboard."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "CGFixIT" }]
+dynamic = ["version"]
+dependencies = [
+  "pydantic>=2.9",
+  "pydantic-settings>=2.5",
+  "psutil>=6.0",
+  "httpx>=0.27",
+  "cryptography>=43.0",
+  "pyyaml>=6.0.2",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+server = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "jinja2>=3.1.4",
+]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=5.0",
+  "hypothesis>=6.112",
+  "mypy>=1.11",
+  "ruff>=0.6",
+  "types-PyYAML>=6.0",
+  "fastapi>=0.115",
+  "httpx>=0.27",
+]
+
+[project.scripts]
+WynDoze-InfoScanOverload-agent = "wyndoze_infoscanoverload.agent.cli:main"
+WynDoze-InfoScanOverload-server = "wyndoze_infoscanoverload.server.__main__:main"
+
+[tool.hatch.version]
+path = "src/wyndoze_infoscanoverload/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wyndoze_infoscanoverload"]
+artifacts = ["src/wyndoze_infoscanoverload/core/rulepacks/*.yaml"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D203", "D213", "COM812", "ISC001",
+  "D100", "D104", "D105", "D107",
+  "ANN401",  # allow Any at documented boundaries (telemetry blobs)
+  "PLR0913", # collectors legitimately take several tunables
+  "TD", "FIX", # todo comment lints not useful here
+  # Pydantic v2 + FastAPI resolve annotations at runtime, so imports used only
+  # in annotations must stay out of TYPE_CHECKING blocks.
+  "TC001", "TC002", "TC003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004", "ANN", "D", "SLF001", "INP001", "PIE810"]
+"src/wyndoze_infoscanoverload/server/templates.py" = ["E501"]
+# Typer models CLI flags as boolean parameters; the "boolean trap" lints do not
+# apply to a command-line interface where each flag is self-documenting.
+"src/wyndoze_infoscanoverload/agent/cli.py" = ["FBT001", "FBT002"]
+
+[tool.ruff.lint.flake8-bandit]
+check-typed-exception = true
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+warn_redundant_casts = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["psutil.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+asyncio_mode = "auto"
+markers = [
+  "integration: tests that spin up the FastAPI app",
+]
+testpaths = ["tests"]
