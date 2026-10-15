@@ -2,7 +2,15 @@
 
 This guide is for an operator on Windows 10 or Windows 11 with Python 3.12. It gets a loopback dashboard and one agent scan running. It does not register a scheduled task unless you run that script yourself.
 
+These commands do not run on macOS. Use the macOS block in [README.md](README.md). On macOS the agent still collects processes and listening ports. Services, installed software, and local administrator names stay empty, because those collectors run on Windows and on Linux. There is no Mac scheduled-task script in this tree. `windows-latest` is a GitHub Actions image name, not a desktop edition. The task script below is for Windows 10 and Windows 11.
+
 The product is an internal scanner.
+
+## Open the window
+
+`deploy\windows\Start-WynDoze.ps1` creates `.venv` when it is missing, installs the server extra, and opens a window. The window shows the product name, a short description, a scan role, and buttons to run a collect-only scan, start the dashboard, stop the dashboard, and open `documentation.pdf` when that file is in the project folder. Email alerts are off until you check the box and fill in the SMTP host, port, username, password, and recipient. The password stays in that process. It is not written into the repo.
+
+The schedule buttons register `WynDoze-InfoScanOverload-scan` for the current user, daily, weekly, or monthly, at 02:30. That task runs `scan --no-upload`. It does not upload and it does not send mail. It is not a SYSTEM task. The existing `Install-ReconAgentTask.ps1` script is still the separate admin path for a daily SYSTEM task.
 
 ## Install
 
@@ -66,7 +74,15 @@ $env:RECON_AGENT_DISABLE = "1"
 
 ## Work the inbox
 
-Sign in, then open **Triage Inbox**. Flag, archive, suppress, or send a finding back to triage from that page. A browser on another origin receives 403. A request with no `Origin` header still works, which is how the local page posts.
+Sign in, then open **Triage Inbox**. Each finding is a card.
+
+Flag and Archive post at once. Flag does not stick across a later scan. The next scan that sees the same evidence returns that finding to triage. Archive stays archived. Re-triage posts the finding back to the inbox.
+
+Suppress opens a confirm page. Cancel returns you to the desk and does not write. Confirm posts the existing suppress action. A suppressed finding stays suppressed on later scans. The rule still runs.
+
+Open **Timeline** to see recent scans. A scan id opens that scan's public facts and the findings the scan last updated.
+
+A browser on another origin receives 403. A request with no `Origin` header still works, which is how the local page posts.
 
 Exports are CSV, Markdown, JSON, and Sentinel NDJSON. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with a single quote.
 

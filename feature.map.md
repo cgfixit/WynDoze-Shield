@@ -8,6 +8,7 @@ Reference for the working tree at version 1.0.0. Behavior below matches the code
 |---|---|---|
 | `WynDoze-InfoScanOverload-agent` | `wyndoze_infoscanoverload.agent.cli:main` | Collect, upload, bundle, replay, evaluate |
 | `WynDoze-InfoScanOverload-server` | `wyndoze_infoscanoverload.server.__main__:main` | Loopback dashboard and ingest |
+| `WynDoze-InfoScanOverload-desktop` | `wyndoze_infoscanoverload.desktop:main` | Windows window for scan, dashboard, schedule, and opt-in SMTP alerts |
 
 Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and `version`.
 
@@ -18,6 +19,8 @@ Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and 
 | `GET /api/health` | none | 200 and `{"status":"ok"}` |
 | `POST /api/scans` | bearer `RECON_INGEST_TOKEN` | 201, or 401, or 413 over 8 MiB, or 422 when the JSON is not a report |
 | `GET /`, `/triage`, `/timeline`, `/endpoints`, `/reports/summary` | basic auth | HTML |
+| `GET /findings/{id}/suppress/confirm` | basic auth | HTML confirm page. Cancel does not write. Confirm posts `suppress`. |
+| `GET /scans/{id}` | basic auth | HTML scan facts, or 404 when the scan is missing or unreadable |
 | `POST /findings/{id}/{action}` | basic auth, and a matching `Origin` when that header is present | 303, 403, or 404 |
 | `GET /export/findings.{fmt}` | basic auth | `csv`, `md`, `json`, or `sentinel` |
 | `/docs`, `/redoc`, `/openapi.json` | none | 404 |

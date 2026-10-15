@@ -91,6 +91,21 @@ CREATE INDEX IF NOT EXISTS idx_findings_hostname ON findings(hostname);
 """
 
 _VALID_STATUS = {s.value for s in FindingStatus}
+_PUBLIC_SCAN_SQL = """
+SELECT id, received_at_utc, hostname, fqdn, role, scan_time_utc,
+       platform_system, platform_release,
+       finding_count, critical_count, high_count, medium_count, low_count
+FROM scans
+ORDER BY received_at_utc DESC
+LIMIT ?
+"""
+_FINDING_ORDER = """
+    ORDER BY CASE severity
+        WHEN 'critical' THEN 4 WHEN 'high' THEN 3
+        WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC,
+    last_seen_utc DESC
+    LIMIT ?
+"""
 
 
 class Storage:
@@ -218,6 +233,12 @@ class Storage:
         )
 
     # -- reads -------------------------------------------------------------
+    def list_scans_public(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return recent scans without raw JSON or IP address blobs."""
+        with self._connect() as conn:
+            rows = conn.execute(_PUBLIC_SCAN_SQL, (limit,)).fetchall()
+        return [dict(row) for row in rows]
+
     def list_scans(self, limit: int = 100) -> list[dict[str, Any]]:
         """Return recent scans, newest first."""
         with self._connect() as conn:
@@ -239,21 +260,53 @@ class Storage:
             rows = conn.execute("SELECT * FROM endpoints ORDER BY last_seen_utc DESC").fetchall()
         return [dict(r) for r in rows]
 
-    def list_findings(self, status: str | None = None, limit: int = 500) -> list[dict[str, Any]]:
-        """Return findings (optionally filtered by status), severity-sorted."""
-        query = "SELECT * FROM findings"
-        params: list[Any] = []
-        if status:
-            query += " WHERE status = ?"
-            params.append(status)
-        # Order by severity rank desc then recency.
-        query += """
-            ORDER BY CASE severity
-                WHEN 'critical' THEN 4 WHEN 'high' THEN 3
-                WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC,
-            last_seen_utc DESC
-            LIMIT ?
+    def open_finding_counts(self) -> dict[str, int]:
+        """Count triage and flagged findings for each hostname.
+
+        The predicate matches ``summary``: ``status IN ('triage','flagged')``.
         """
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT hostname, COUNT(*) AS c FROM findings
+                   WHERE status IN ('triage','flagged')
+                   GROUP BY hostname"""
+            ).fetchall()
+        return {str(row["hostname"]): int(row["c"]) for row in rows}
+
+    def list_findings(
+        self,
+        status: str | None = None,
+        limit: int = 500,
+        *,
+        hostname: str | None = None,
+        severity: str | None = None,
+        scan_id: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return findings, severity-sorted.
+
+        ``active`` means ``status IN ('triage','flagged')``. That list is a SQL
+        constant. The word ``active`` is never bound as a row value.
+        """
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status == "active":
+            clauses.append("status IN ('triage','flagged')")
+        elif status:
+            clauses.append("status = ?")
+            params.append(status)
+        if hostname:
+            clauses.append("hostname = ?")
+            params.append(hostname)
+        if severity:
+            clauses.append("severity = ?")
+            params.append(severity)
+        if scan_id is not None:
+            clauses.append("scan_id = ?")
+            params.append(scan_id)
+        query = "SELECT * FROM findings"
+        if clauses:
+            query = query + " WHERE " + " AND ".join(clauses)
+        query = query + _FINDING_ORDER
         params.append(limit)
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
