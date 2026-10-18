@@ -7,6 +7,7 @@ attacker-controlled telemetry (hostnames, process names, etc.).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from html import escape
 from typing import Any
 
@@ -71,6 +72,18 @@ def page(title: str, body: str) -> str:
         "<div class='sub'>Internal endpoint scanner</div></header>"
         f"{_NAV}<main>{body}</main></body></html>"
     )
+
+
+def _display_time(value: str | None) -> str:
+    if not value:
+        return "Unknown"
+    try:
+        timestamp = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    if timestamp.tzinfo is None:
+        return value
+    return timestamp.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def _coverage_html(health: dict[str, Any]) -> str:
@@ -212,9 +225,9 @@ def endpoints_table(endpoints: list[dict[str, Any]]) -> str:
         f"<td>{escape(e.get('hostname', ''))}</td>"
         f"<td>{escape(e.get('fqdn') or '')}</td>"
         f"<td><code>{escape(e.get('role', 'unknown'))}</code></td>"
-        f"<td>{escape(e.get('first_seen_utc', ''))}</td>"
-        f"<td>{escape(e.get('scan_time_utc') or 'Unknown')}</td>"
-        f"<td>{escape(e.get('last_seen_utc', ''))}</td>"
+        f"<td>{escape(_display_time(e.get('first_seen_utc')))}</td>"
+        f"<td>{escape(_display_time(e.get('scan_time_utc')))}</td>"
+        f"<td>{escape(_display_time(e.get('last_seen_utc')))}</td>"
         f"<td>{escape(e.get('freshness', 'unknown'))}</td>"
         f"<td>{_coverage_html(e.get('collection_health', {}))}</td>"
         "</tr>"
