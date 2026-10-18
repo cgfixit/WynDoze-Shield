@@ -17,9 +17,7 @@ PASSWORD = "synthetic"  # noqa: S105 - disposable fixture
 
 @pytest.mark.parametrize("fmt", ["json", "csv", "md", "sentinel"])
 def test_exports_include_all_rows_beyond_dashboard_cap(tmp_path, fmt):
-    app = create_app(
-        ServerConfig(db_path=tmp_path / "state.sqlite3", dashboard_password=PASSWORD)
-    )
+    app = create_app(ServerConfig(db_path=tmp_path / "state.sqlite3", dashboard_password=PASSWORD))
     storage = app.state.storage
     report = ScanReport(hostname="=synthetic", scan_time_utc="2026-10-18T12:00:00Z")
     storage.record_scan(
