@@ -317,9 +317,7 @@ def test_triage_card_actions(client: TestClient, backup_server_report: ScanRepor
     assert 'href="/triage?status=triage&amp;severity=critical"' in page
 
 
-def test_low_findings_stay_in_details(
-    client: TestClient, backup_server_report: ScanReport
-) -> None:
+def test_low_findings_stay_in_details(client: TestClient, backup_server_report: ScanReport) -> None:
     report = backup_server_report.model_copy(
         update={"installed_software": [SoftwareInfo(name="PuTTY")]}
     )
@@ -417,9 +415,7 @@ def test_suppress_confirm_cancel_does_not_write(
     assert client.app.state.storage.get_finding(1)["status"] == "triage"
 
 
-def test_suppress_confirm_post_writes(
-    client: TestClient, backup_server_report: ScanReport
-) -> None:
+def test_suppress_confirm_post_writes(client: TestClient, backup_server_report: ScanReport) -> None:
     report = backup_server_report.model_copy(update={"hostname": "a&b"})
     _ingest(client, report)
     desk = client.get(

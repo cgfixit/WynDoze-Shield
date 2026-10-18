@@ -39,7 +39,7 @@ Open a draft only after the user asks for that chunk. Never push `main`. Never f
 
 Title shape is `[prefix] - sentence`. Body headings are Summary, Test evidence, Merge order, and Base. Fill Test evidence with commands you actually ran.
 
-Before that pull request, run the focused pytest for the modules you touched. For a code change, also run `ruff check src tests` and `mypy src`. A docs-only chunk does not need mypy. Say what you did not run. `README.md` lists the full local commands. This tree has no GitHub Actions workflow.
+Before that pull request, run the focused pytest for the modules you touched. For a code change, also run `ruff check src tests` and `mypy src`. A docs-only chunk does not need mypy. Say what you did not run. `README.md` lists the full local commands. `.github/workflows/ci.yml` runs the same lint, mypy, and pytest steps on Ubuntu and Windows with a coverage floor of 80.
 
 When a remote exists, create the draft with `"C:\Program Files\GitHub CLI\gh.exe" pr create --draft`. On PowerShell, do not pass an unquoted `#`. When no remote exists, commit on the branch and stop. Do not invent `cgfixit/WynDoze-InfoScanOverload`.
 

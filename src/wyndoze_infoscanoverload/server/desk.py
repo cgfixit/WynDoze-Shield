@@ -17,13 +17,15 @@ _ASCII_DELETE = 127
 _CONTROL_BELOW = 32
 _STATUSES = frozenset({"triage", "flagged", "archived", "suppressed", "active"})
 _SEVERITIES = frozenset({"critical", "high", "medium", "low", "info"})
-_NEXT_PATHS = frozenset({
-    "/",
-    "/triage",
-    "/timeline",
-    "/endpoints",
-    "/reports/summary",
-})
+_NEXT_PATHS = frozenset(
+    {
+        "/",
+        "/triage",
+        "/timeline",
+        "/endpoints",
+        "/reports/summary",
+    }
+)
 _NEXT_KEYS = frozenset({"status", "severity", "host"})
 _SCAN_NEXT = re.compile(r"/scans/[0-9]{1,18}")
 

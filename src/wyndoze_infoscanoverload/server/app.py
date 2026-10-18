@@ -25,6 +25,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.telemetry import TelemetryConfig
 from pydantic import ValidationError
 
+from wyndoze_infoscanoverload._version import __version__
 from wyndoze_infoscanoverload.alerts import notify_findings
 from wyndoze_infoscanoverload.core.models import Finding, ScanReport
 from wyndoze_infoscanoverload.core.rulepacks import default_rule_pack
@@ -62,6 +63,8 @@ _HTML_HEADERS: dict[str, str] = {
 def _html(body: str) -> HTMLResponse:
     """Return an HTML page with the dashboard response headers."""
     return HTMLResponse(body, headers=_HTML_HEADERS)
+
+
 _TELEMETRY_OFF: TelemetryConfig = {
     "tracing": False,
     "metrics": False,
@@ -102,7 +105,7 @@ def create_app(config: ServerConfig | None = None) -> FastAPI:
 
     app = FastAPI(
         title="WynDoze-InfoScanOverload",
-        version="1.0.0",
+        version=__version__,
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -286,9 +289,7 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901, PLR0915 - cohesive ro
 
     # -- findings lifecycle ------------------------------------------------
     @app.get("/findings/{finding_id}/suppress/confirm", response_class=HTMLResponse)
-    def suppress_confirm(
-        finding_id: int, request: Request, _: None = DashAuth
-    ) -> HTMLResponse:
+    def suppress_confirm(finding_id: int, request: Request, _: None = DashAuth) -> HTMLResponse:
         finding = app.state.storage.get_finding(finding_id)
         if finding is None:
             raise HTTPException(status_code=404, detail="not found")

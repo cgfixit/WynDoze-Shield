@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
 from tkinter import ttk
+from typing import IO
 
 ABOUT = (
     "WynDoze-InfoScanOverload is a local inventory scanner. "
@@ -125,11 +126,26 @@ def task_command(agent: Path, role: str, output: Path) -> str:
     return f'"{argv[0]}" scan --no-upload --role {role} --output-json "{argv[-1]}"'
 
 
+def status_from_server_log(text: str, *, alive: bool, healthy: bool) -> str:
+    """Turn a server log into the window status. Healthy wins over a stale error."""
+    if healthy:
+        return "Dashboard is up."
+    for line in reversed(text.splitlines()):
+        stripped = line.strip()
+        if "Error" in stripped or "error" in stripped:
+            return stripped[:180]
+    if not alive:
+        return "Server exited before it answered."
+    return "Dashboard did not answer."
+
+
 @dataclass
 class DashboardProcess:
     """One loopback server child. Stop replaces a second start."""
 
     process: subprocess.Popen[bytes] | None = None
+    log_path: Path | None = None
+    log_file: IO[str] | None = None
 
     def running(self) -> bool:
         """Return whether the child is still alive."""
@@ -139,10 +155,27 @@ class DashboardProcess:
         """Start the server if it is not already running."""
         if self.running():
             return
-        self.process = subprocess.Popen(  # noqa: S603 - argv is the local console script
-            [os.fspath(server)],
-            env=env,
-        )
+        log_dir = Path(env.get("LOCALAPPDATA", ".")) / "WynDoze-InfoScanOverload"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        self.log_path = log_dir / "server.log"
+        self._close_log()
+        self.log_file = self.log_path.open("w", encoding="utf-8")
+        try:
+            self.process = subprocess.Popen(  # noqa: S603 - argv is the local console script
+                [os.fspath(server)],
+                env=env,
+                stdout=self.log_file,
+                stderr=subprocess.STDOUT,
+            )
+        except OSError:
+            self._close_log()
+            raise
+
+    def log_text(self) -> str:
+        """Return the server log captured for this start."""
+        if self.log_path is None or not self.log_path.is_file():
+            return ""
+        return self.log_path.read_text(encoding="utf-8", errors="replace")
 
     def stop(self) -> None:
         """Terminate the child and wait. Kill it if it ignores terminate."""
@@ -156,6 +189,13 @@ class DashboardProcess:
                 self.process.kill()
                 self.process.wait(timeout=8)
         self.process = None
+        self._close_log()
+
+    def _close_log(self) -> None:
+        """Close the server log handle after the child no longer needs it."""
+        if self.log_file is not None:
+            self.log_file.close()
+            self.log_file = None
 
 
 def server_env(
@@ -167,6 +207,9 @@ def server_env(
 ) -> dict[str, str]:
     """Copy the process environment and set loopback server values."""
     env = os.environ.copy()
+    data_dir = Path(env.get("LOCALAPPDATA", ".")) / "WynDoze-InfoScanOverload"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    env["RECON_DB_PATH"] = str(data_dir / "WynDoze-InfoScanOverload.sqlite3")
     env["RECON_HOST"] = "127.0.0.1"
     env["RECON_PORT"] = port
     env["RECON_INGEST_TOKEN"] = token
@@ -201,13 +244,20 @@ class AlertMail:
     recipient: str
 
 
-def wait_until_healthy(port: str, timeout_s: float = 15) -> bool:
-    """Poll ``/api/health`` until it returns ok or the timeout elapses."""
+def wait_until_healthy(
+    port: str,
+    timeout_s: float = 15,
+    process: subprocess.Popen[bytes] | None = None,
+) -> bool:
+    """Poll loopback ``/api/health``. Do not send the check through a proxy."""
     url = f"http://127.0.0.1:{port}/api/health"
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            return False
         try:
-            with urllib.request.urlopen(url, timeout=1) as response:
+            with opener.open(url, timeout=1) as response:
                 if response.status == HTTPStatus.OK:
                     return True
         except OSError:
@@ -286,9 +336,13 @@ def main() -> None:  # noqa: C901, PLR0915 - one window, one place
         set_status("Starting the dashboard on 127.0.0.1:8000.")
 
         def _watch() -> None:
-            ok = wait_until_healthy("8000")
-            message = "Dashboard is up." if ok else "Dashboard did not answer."
-            window.after(0, lambda text=message: set_status(text))
+            ok = wait_until_healthy("8000", process=dashboard.process)
+            message = status_from_server_log(
+                dashboard.log_text(),
+                alive=dashboard.running(),
+                healthy=ok,
+            )
+            window.after(0, set_status, message)
 
         threading.Thread(target=_watch, daemon=True).start()
 
@@ -313,11 +367,10 @@ def main() -> None:  # noqa: C901, PLR0915 - one window, one place
                     timeout=300,
                 )
             except (OSError, subprocess.TimeoutExpired) as exc:
-                kind = type(exc).__name__
-                window.after(0, lambda text=kind: set_status(f"Scan failed: {text}"))
+                window.after(0, set_status, f"Scan failed: {type(exc).__name__}")
                 return
             line = "Scan finished." if completed.returncode == 0 else "Scan exited non-zero."
-            window.after(0, lambda: set_status(line))
+            window.after(0, set_status, line)
 
         threading.Thread(target=_run, daemon=True).start()
         set_status("Scan is running.")
@@ -379,7 +432,12 @@ def main() -> None:  # noqa: C901, PLR0915 - one window, one place
         ttk.Entry(line, textvariable=variable, width=40, show=show).pack(side="left")
 
     ttk.Label(frame, textvariable=status, wraplength=580).pack(anchor="w", pady=12)
-    window.protocol("WM_DELETE_WINDOW", lambda: (stop_dashboard(), window.destroy()))
+
+    def on_close() -> None:
+        stop_dashboard()
+        window.destroy()
+
+    window.protocol("WM_DELETE_WINDOW", on_close)
     window.mainloop()
 
 

@@ -200,9 +200,7 @@ def summary_page(summary: dict[str, Any]) -> str:
     """Render the morning count strip. A zero is not painted as an alarm."""
     sev = summary.get("active_findings_by_severity", {})
     status = summary.get("findings_by_status", {})
-    cards = [
-        _severity_count_card(level, int(sev.get(level, 0) or 0)) for level in _SUMMARY_LEVELS
-    ]
+    cards = [_severity_count_card(level, int(sev.get(level, 0) or 0)) for level in _SUMMARY_LEVELS]
     info = int(sev.get("info", 0) or 0)
     if info:
         cards.append(_severity_count_card("info", info))
@@ -236,11 +234,7 @@ def _severity_count_card(level: str, count: int) -> str:
 
 def cmdline_rule_names(rules: Iterable[Rule]) -> dict[str, frozenset[str]]:
     """Index loaded cmdline_flag rules by id. Names are already lowercased."""
-    return {
-        rule.rule_id: frozenset(rule.names)
-        for rule in rules
-        if rule.kind == "cmdline_flag"
-    }
+    return {rule.rule_id: frozenset(rule.names) for rule in rules if rule.kind == "cmdline_flag"}
 
 
 def evidence_label(
@@ -313,24 +307,19 @@ def _finding_stack(
     quiet_html = ""
     if quiet:
         quiet_html = (
-            f"<details><summary>Low and info ({len(quiet)})</summary>"
-            f"{''.join(quiet)}</details>"
+            f"<details><summary>Low and info ({len(quiet)})</summary>{''.join(quiet)}</details>"
         )
     return "".join(primary) + quiet_html
 
 
 def _filter_row(query: DeskQuery, endpoints: list[dict[str, Any]]) -> str:
     """Render severity and host chips as links."""
-    severity_chips = [
-        _filter_chip(query, None, query.host, "Any", current=query.severity is None)
-    ]
+    severity_chips = [_filter_chip(query, None, query.host, "Any", current=query.severity is None)]
     severity_chips.extend(
         _filter_chip(query, level, query.host, level, current=query.severity == level)
         for level in _SEVERITY_CHIPS
     )
-    host_chips = [
-        _filter_chip(query, query.severity, None, "Any host", current=query.host is None)
-    ]
+    host_chips = [_filter_chip(query, query.severity, None, "Any host", current=query.host is None)]
     for endpoint in endpoints:
         name = str(endpoint.get("hostname") or "")
         if not legal_host(name):
@@ -401,8 +390,7 @@ def _identity_line(finding: dict[str, Any]) -> str:
     href = safe_technique_href(finding.get("technique_url"))
     if href and technique:
         technique = (
-            f'<a href="{escape(href)}" target="_blank" '
-            f'rel="noopener noreferrer">{technique}</a>'
+            f'<a href="{escape(href)}" target="_blank" rel="noopener noreferrer">{technique}</a>'
         )
     parts = [
         escape(str(finding.get("rule_id") or "")),
@@ -438,11 +426,7 @@ def _action_row(finding: dict[str, Any], next_path: str) -> str:
     note = _ACTION_NOTE.get(status, "")
     note_html = f'<p class="muted">{escape(note)}</p>' if note else ""
     return (
-        '<div class="actions">'
-        f'<div class="actions-main">{main}</div>'
-        f"{sticky_html}"
-        "</div>"
-        f"{note_html}"
+        f'<div class="actions"><div class="actions-main">{main}</div>{sticky_html}</div>{note_html}'
     )
 
 
@@ -542,10 +526,7 @@ def scan_page(
     query = DeskQuery(status="triage", severity=None, host=None)
     cards = _finding_stack(findings, query, cmdline_rules, return_path=next_path)
     body = (
-        "<h2>Scan</h2>"
-        f"{_scan_facts(facts)}"
-        "<p>Findings were last updated by this scan.</p>"
-        f"{cards}"
+        f"<h2>Scan</h2>{_scan_facts(facts)}<p>Findings were last updated by this scan.</p>{cards}"
     )
     return page("WynDoze-InfoScanOverload Scan", body, current="/timeline")
 
@@ -583,10 +564,7 @@ def _scan_facts(facts: dict[str, Any]) -> str:
     chips = "".join(f"<li>{escape(str(name))}</li>" for name in names)
     pattern_html = ""
     if names:
-        pattern_html = (
-            "<h3>Matched pattern, not the command line</h3>"
-            f"<ul>{chips}</ul>"
-        )
+        pattern_html = f"<h3>Matched pattern, not the command line</h3><ul>{chips}</ul>"
     sealed = int(facts.get("sealed_command_line_count") or 0)
     sealed_html = ""
     if sealed:

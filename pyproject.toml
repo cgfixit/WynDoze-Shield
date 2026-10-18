@@ -66,6 +66,7 @@ ignore = [
   # Pydantic v2 + FastAPI resolve annotations at runtime, so imports used only
   # in annotations must stay out of TYPE_CHECKING blocks.
   "TC001", "TC002", "TC003",
+  "CPY",     # no per-file copyright header; LICENSE covers the tree
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -73,7 +74,7 @@ ignore = [
 "src/wyndoze_infoscanoverload/server/templates.py" = ["E501"]
 # Typer models CLI flags as boolean parameters; the "boolean trap" lints do not
 # apply to a command-line interface where each flag is self-documenting.
-"src/wyndoze_infoscanoverload/agent/cli.py" = ["FBT001", "FBT002"]
+"src/wyndoze_infoscanoverload/agent/cli.py" = ["FBT001", "FBT002", "PLR0917"]
 
 [tool.ruff.lint.flake8-bandit]
 check-typed-exception = true
