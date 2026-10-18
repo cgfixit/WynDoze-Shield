@@ -34,6 +34,8 @@ class ServerConfig(BaseSettings):
     # Rule pack path (defaults to the bundled pack when unset).
     rules_path: Path | None = None
 
+    stale_after_hours: int = Field(default=36, ge=1, le=8760)
+
     def dashboard_auth_enabled(self) -> bool:
         """Return whether a non-empty dashboard password is configured.
 

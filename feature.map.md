@@ -30,7 +30,12 @@ platform-scoped and empty service inventories do not prove a missing service.
 
 Actions are `flag`, `archive`, `suppress`, and `triage`.
 
-Finding tables are limited to 500 rows. Authenticated CSV, Markdown, JSON, and
+Finding tables use 50-row pages with stable severity/time/ID ordering. Optional
+`hostname`, `rule_id`, `severity`, `status`, and `page` query parameters filter
+`/triage` and `/timeline`; the inbox defaults to triage. `/findings/{id}` requires
+dashboard authentication and shows complete escaped evidence and matching-scan
+times. Invalid filter/page values return 422; absent findings return 404.
+Repeated evidence preserves operator status; changed evidence creates a new row. Authenticated CSV, Markdown, JSON, and
 Sentinel exports include all stored findings and are rendered in memory.
 
 ## Agent environment
@@ -55,13 +60,16 @@ Sentinel exports include all stored findings and are rendered in memory.
 | `RECON_HOST` | `127.0.0.1` | Only `127.0.0.1` or `::1` |
 | `RECON_PORT` | `8000` | Listen port |
 
+Startup creates a missing database parent privately and preserves existing directory
+permissions. Server/development FastAPI floors are 0.143.0.
+
 FastAPI telemetry flags are forced off inside `create_app`. `OTEL_SDK_DISABLED` is set to `true`.
 
 ## Limits
 
 | Item | Limit |
 |---|---|
-| Ingest body | 8 MiB, then 413 |
+| Ingest body | Authenticate first; count streamed bytes before retaining them; 413 at the first chunk crossing 8 MiB |
 | `scan_time_utc` | 64 characters |
 | Short strings such as `exe` and `display_name` | 512 characters, clipped before the model is built |
 | Process list | 5000 on the model. The agent default `process_limit` is 1000 |
@@ -69,6 +77,15 @@ FastAPI telemetry flags are forced off inside `create_app`. `OTEL_SDK_DISABLED` 
 | Software list | The agent default `software_limit` is 2000. The second registry hive is not read after the limit is full |
 | Unknown model keys on platform, service, and software | Dropped |
 | Unknown rule severity | `RuleError` at pack load. Observations still coerce unknown values to `info` |
+
+## Collection health
+
+`collection_health` is optional on the wire (at most six collectors). New agents
+report ok/partial/unavailable/failed, item count, duration_ms, truncated and up to
+eight fixed issue categories. Legacy reports retain unknown coverage. Endpoints
+show collection and receipt times separately; age defaults to 36 hours via
+`RECON_STALE_AFTER_HOURS`. No finding is automatically resolved from missing data.
+Missing-service checks skip explicitly incomplete service inventories.
 
 ## Collectors
 

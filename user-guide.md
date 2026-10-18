@@ -24,6 +24,10 @@ You should see `WynDoze-InfoScanOverload-agent.exe` and `WynDoze-InfoScanOverloa
 
 ## Start the dashboard
 
+The server requires FastAPI 0.143.0+. A missing database parent is created with
+access for its owner, SYSTEM, and Administrators. Existing directory permissions
+are preserved. ACL setup failures prevent database creation.
+
 Set both secrets. An unset or empty value returns 401.
 
 ```powershell
@@ -85,6 +89,13 @@ $env:RECON_AGENT_DISABLE = "1"
 .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe scan --no-upload --output-json .\report.json --role workstation
 ```
 
+## Ingest limits
+
+The server authenticates before reading a report and returns 413 as soon as
+received body bytes exceed 8 MiB. Rejected reports are not evaluated or stored.
+This bounds accumulated application body bytes; transport buffers, the current
+ASGI chunk, concurrent requests, and valid JSON parsing also consume memory.
+
 ## Work the inbox
 
 The installed v1.2 rule pack matches the source copy and contains 28 rules.
@@ -103,9 +114,26 @@ Sign in, then open **Triage Inbox**. Flag, archive, suppress, or send a finding 
 
 Exports are CSV, Markdown, JSON, and Sentinel NDJSON. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with a single quote.
 
-Finding tables show at most 500 rows; the page states that limit. All four export
+Finding tables show 50 rows per page. Filter by exact hostname/rule ID, severity,
+or status; Next and Previous retain the selected filters. Page numbers start at 1;
+invalid page or filter values return HTTP 422. Click a finding title
+to see complete escaped evidence, first/last seen, occurrence count and the latest
+matching scan with separate collection/receipt times. Repeated identical evidence
+preserves review decisions, including Flagged. Changed evidence gets a separate
+finding. Empty results retain filter controls. All four export
 formats include the complete stored finding set, including archived and suppressed
-rows. Full exports are rendered in memory and can be large on a busy dashboard.
+rows, regardless of the current filters. Full exports are rendered in memory and can be large on a busy dashboard.
+
+## Check collection health
+
+Open **Endpoints** to compare **Collected** with **Received**. An upload can
+succeed while a collector is partial, unavailable, or failed. Coverage reports
+counts, milliseconds, truncation and bounded issue categories, never command
+text or stderr. Older agents show unknown coverage. No findings does not mean
+a complete or clean scan. Reports older than `RECON_STALE_AFTER_HOURS` (36 by
+default) are overdue; future or timezone-less timestamps have unknown age.
+An air-gapped replay changes receipt time, not collection time. Missing-service
+rules are skipped when reported service coverage is incomplete.
 
 ## Keep a bundle when upload fails
 
@@ -136,3 +164,7 @@ delay. Native `-File` arguments use double quotes, while values inside the
 UTF-8 wrapper use PowerShell quoting. The wrapper returns the agent exit code,
 and installation stops if a task-state ACL cannot be applied. The task is
 allowed to start on battery.
+
+The synthetic installer check resets its exit status only after all assertions
+pass, including the expected child exit and ACL failure probes. A failed assertion
+still fails the PowerShell workflow. It does not register a real task or change ACLs.
