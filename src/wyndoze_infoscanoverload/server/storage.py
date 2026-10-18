@@ -19,7 +19,9 @@ volume, retention, and the host; no endpoint-count guarantee is implied.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -90,6 +92,36 @@ CREATE INDEX IF NOT EXISTS idx_findings_hostname ON findings(hostname);
 """
 
 _VALID_STATUS = {s.value for s in FindingStatus}
+_IS_WINDOWS = os.name == "nt"
+
+
+def _prepare_db_parent(path: Path) -> None:
+    """Create private state without changing an operator-provisioned directory."""
+    parent = path.parent
+    try:
+        parent.mkdir(parents=True, mode=0o700)
+    except FileExistsError:
+        return
+    if _IS_WINDOWS:
+        icacls = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "icacls.exe"
+        try:
+            subprocess.run(  # noqa: S603 - fixed tool path and SID arguments, no shell
+                [
+                    os.fspath(icacls),
+                    os.fspath(parent),
+                    "/inheritance:r",
+                    "/grant:r",
+                    "*S-1-5-18:(OI)(CI)F",
+                    "*S-1-5-32-544:(OI)(CI)F",
+                    "*S-1-3-4:(OI)(CI)F",
+                ],
+                check=True,
+                capture_output=True,
+                timeout=20,
+            )
+        except (OSError, subprocess.SubprocessError):
+            parent.rmdir()
+            raise
 
 
 class Storage:
@@ -111,6 +143,7 @@ class Storage:
 
     def init_db(self) -> None:
         """Create tables and indexes if absent."""
+        _prepare_db_parent(self._db_path)
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL").fetchone()
             conn.executescript(_SCHEMA)
