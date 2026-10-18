@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from html import escape
 from typing import Any
+from urllib.parse import urlencode
 
 _STYLE = """
 :root { color-scheme: light dark; }
@@ -129,7 +130,8 @@ def _finding_row(f: dict[str, Any], *, actions: bool = True) -> str:
         "<tr>"
         f"<td>{_severity_badge(f.get('severity', ''))}</td>"
         f"<td>{escape(f.get('hostname', ''))}</td>"
-        f"<td>{escape(f.get('title', ''))}<br><span class='muted'>"
+        f"<td><a href='/findings/{int(f.get('id', 0))}'>"
+        f"{escape(f.get('title', ''))}</a><br><span class='muted'>"
         f"{escape(f.get('message') or '')}</span></td>"
         f"<td>{technique}</td>"
         f"<td><code>{escape(f.get('status', ''))}</code> "
@@ -140,28 +142,101 @@ def _finding_row(f: dict[str, Any], *, actions: bool = True) -> str:
     )
 
 
-def findings_table(findings: list[dict[str, Any]], title: str, *, actions: bool = True) -> str:
-    """Render a findings table page."""
-    if not findings:
-        body = f"<h2>{escape(title)}</h2><p class='muted'>No findings.</p>"
-        return page(f"WynDoze-InfoScanOverload {title}", body)
-    action_th = "<th>Actions</th>" if actions else ""
-    rows = "".join(_finding_row(f, actions=actions) for f in findings)
+def _filters_form(filters: dict[str, str | None]) -> str:
+    fields = []
+    for key, label in (("hostname", "Host (exact)"), ("rule_id", "Rule ID (exact)")):
+        fields.append(
+            f"<label>{label} <input name='{key}' value='{escape(filters.get(key) or '')}'></label> "
+        )
+    for key, values in (
+        ("status", ("triage", "flagged", "archived", "suppressed")),
+        ("severity", ("critical", "high", "medium", "low", "info")),
+    ):
+        options = "<option value=''>All</option>" + "".join(
+            f"<option value='{value}'"
+            + (" selected" if filters.get(key) == value else "")
+            + f">{value}</option>"
+            for value in values
+        )
+        fields.append(f"<label>{key.title()} <select name='{key}'>{options}</select></label> ")
+    return (
+        "<form method='get' action='/timeline'>"
+        + "".join(fields)
+        + "<button type='submit'>Filter</button> <a href='/timeline'>Clear filters</a></form>"
+    )
+
+
+def findings_table(
+    findings: list[dict[str, Any]],
+    title: str,
+    *,
+    actions: bool = True,
+    filters: dict[str, str | None] | None = None,
+    page_number: int = 1,
+    has_next: bool = False,
+) -> str:
+    """Render one stable filtered page; exports continue to include every finding."""
+    filters = filters or {}
+    navigation = []
+    for label, number in (("Previous", page_number - 1), ("Next", page_number + 1)):
+        if number < 1 or (label == "Next" and not has_next):
+            continue
+        query = {key: value for key, value in filters.items() if value}
+        query["page"] = str(number)
+        navigation.append(f"<a href='/timeline?{escape(urlencode(query))}'>{label}</a>")
     body = (
         f"<h2>{escape(title)}</h2>"
-        "<p class='muted'>Showing up to 500 findings. Exports include all stored findings.</p>"
-        "<p class='muted'>"
-        "<a href='/export/findings.csv'>CSV</a> &middot; "
+        + _filters_form(filters)
+        + f"<p>Page {page_number}; {len(findings)} shown. "
+        + " &middot; ".join(navigation)
+        + "</p>"
+        "<p class='muted'>Exports include all stored findings, regardless of these filters.</p>"
+        "<p><a href='/export/findings.csv'>CSV</a> &middot; "
         "<a href='/export/findings.md'>Markdown</a> &middot; "
         "<a href='/export/findings.json'>JSON</a> &middot; "
         "<a href='/export/findings.sentinel'>Sentinel</a></p>"
-        "<table><thead><tr>"
-        "<th>Sev</th><th>Host</th><th>Finding</th><th>Technique</th>"
-        f"<th>Status</th><th>Evidence</th>{action_th}"
-        "</tr></thead><tbody>"
-        f"{rows}</tbody></table>"
     )
+    if findings:
+        action_th = "<th>Actions</th>" if actions else ""
+        rows = "".join(_finding_row(f, actions=actions) for f in findings)
+        body += (
+            "<table><thead><tr><th>Sev</th><th>Host</th><th>Finding</th><th>Technique</th>"
+            f"<th>Status</th><th>Evidence</th>{action_th}</tr></thead><tbody>{rows}</tbody></table>"
+        )
+    else:
+        body += "<p class='muted'>No findings match these filters.</p>"
     return page(f"WynDoze-InfoScanOverload {title}", body)
+
+
+def finding_detail(finding: dict[str, Any], scan: dict[str, Any] | None) -> str:
+    """Display complete escaped finding evidence, without decrypting command lines."""
+    body = (
+        f"<h2>{escape(finding.get('title', ''))}</h2>"
+        "<table><thead><tr><th>Sev</th><th>Host</th><th>Finding</th><th>Technique</th>"
+        "<th>Status</th><th>Evidence preview</th><th>Actions</th></tr></thead><tbody>"
+        + _finding_row(finding)
+        + "</tbody></table>"
+    )
+    body += (
+        "<h3>Complete evidence</h3><ul>"
+        + "".join(
+            f"<li><code>{escape(str(value))}</code></li>" for value in finding.get("evidence", [])
+        )
+        + "</ul>"
+    )
+    for label, value in (
+        ("Rule ID", finding.get("rule_id")),
+        ("First seen", finding.get("first_seen_utc")),
+        ("Last seen", finding.get("last_seen_utc")),
+        ("Occurrences", finding.get("seen_count")),
+        ("Latest matching scan", finding.get("scan_id")),
+        ("Collected", scan.get("scan_time_utc") if scan else None),
+        ("Received", scan.get("received_at_utc") if scan else None),
+    ):
+        body += f"<p><strong>{label}:</strong> {escape(str(value or 'Unknown'))}</p>"
+    body += "<p>Times describe matching observations, not proof of resolution. "
+    body += "<a href='/timeline'>Back to findings</a></p>"
+    return page("Finding details", body)
 
 
 def endpoints_table(endpoints: list[dict[str, Any]]) -> str:

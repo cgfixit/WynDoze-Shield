@@ -24,9 +24,13 @@ These are compatibility targets; native acceptance on each OS is still required.
   are deduplicated per (host, rule, evidence) so recurring conditions bump a
   `seen_count` instead of spamming the inbox.
 
-Dashboard finding tables show at most 500 rows. CSV, Markdown, JSON, and Sentinel
+Dashboard finding tables show 50 rows per page, with host, severity, status, and
+rule filters. Finding titles open complete escaped evidence and matching-scan times. CSV, Markdown, JSON, and Sentinel
 exports include every stored finding, including archived and suppressed rows.
 Full exports are rendered in memory, so their memory use grows with the result set.
+Exports include all stored findings regardless of the current dashboard filters.
+Recurring identical evidence preserves flagged, archived, and suppressed decisions;
+changed evidence creates a separate finding for review.
 
 ### What it deliberately does **not** do
 

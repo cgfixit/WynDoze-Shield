@@ -30,7 +30,12 @@ platform-scoped and empty service inventories do not prove a missing service.
 
 Actions are `flag`, `archive`, `suppress`, and `triage`.
 
-Finding tables are limited to 500 rows. Authenticated CSV, Markdown, JSON, and
+Finding tables use 50-row pages with stable severity/time/ID ordering. Optional
+`hostname`, `rule_id`, `severity`, `status`, and `page` query parameters filter
+`/triage` and `/timeline`; the inbox defaults to triage. `/findings/{id}` requires
+dashboard authentication and shows complete escaped evidence and matching-scan
+times. Invalid filter/page values return 422; absent findings return 404.
+Repeated evidence preserves operator status; changed evidence creates a new row. Authenticated CSV, Markdown, JSON, and
 Sentinel exports include all stored findings and are rendered in memory.
 
 ## Agent environment

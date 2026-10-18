@@ -19,15 +19,16 @@ import secrets
 from typing import Annotated
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.telemetry import TelemetryConfig
 from pydantic import ValidationError
 
-from wyndoze_infoscanoverload.core.models import Finding, ScanReport
+from wyndoze_infoscanoverload.core.models import Finding, FindingStatus, ScanReport
 from wyndoze_infoscanoverload.core.rulepacks import default_rule_pack
 from wyndoze_infoscanoverload.core.rules import RulePack, evaluate, load_rule_pack
+from wyndoze_infoscanoverload.core.severity import Severity
 from wyndoze_infoscanoverload.server import templates
 from wyndoze_infoscanoverload.server.config import ServerConfig
 from wyndoze_infoscanoverload.server.exports import EXPORTERS
@@ -129,7 +130,7 @@ def _reject_foreign_origin(request: Request) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="origin rejected")
 
 
-def _register_routes(app: FastAPI) -> None:  # noqa: C901 - cohesive route table
+def _register_routes(app: FastAPI) -> None:  # noqa: C901, PLR0915 - cohesive route registration
     def dashboard_guard(
         credentials: Annotated[HTTPBasicCredentials | None, Depends(_basic)] = None,
     ) -> None:
@@ -172,14 +173,54 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - cohesive route table
         return templates.summary_page(app.state.storage.summary())
 
     @app.get("/triage", response_class=HTMLResponse)
-    def triage_inbox(_: None = DashAuth) -> str:
-        findings = app.state.storage.list_findings(status="triage")
-        return templates.findings_table(findings, "Triage Inbox")
-
     @app.get("/timeline", response_class=HTMLResponse)
-    def timeline(_: None = DashAuth) -> str:
-        findings = app.state.storage.list_findings()
-        return templates.findings_table(findings, "Timeline (all findings)")
+    def finding_list(
+        request: Request,
+        *,
+        _: None = DashAuth,
+        status_filter: Annotated[str, Query(alias="status", max_length=16)] = "",
+        hostname: Annotated[str | None, Query(max_length=255)] = None,
+        severity: Annotated[str, Query(max_length=16)] = "",
+        rule_id: Annotated[str | None, Query(max_length=512)] = None,
+        page_number: Annotated[int, Query(alias="page", ge=1, le=1000000)] = 1,
+    ) -> str:
+        try:
+            selected = FindingStatus(status_filter).value if status_filter else None
+            selected_severity = Severity(severity).value if severity else None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="invalid finding filter") from exc
+        if request.url.path == "/triage" and selected is None:
+            selected = "triage"
+        page_size = 50
+        findings = app.state.storage.list_findings(
+            status=selected,
+            limit=page_size + 1,
+            offset=(page_number - 1) * page_size,
+            hostname=hostname or None,
+            severity=selected_severity,
+            rule_id=rule_id or None,
+        )
+        filters = {
+            "status": selected,
+            "hostname": hostname or None,
+            "severity": selected_severity,
+            "rule_id": rule_id or None,
+        }
+        return templates.findings_table(
+            findings[:page_size],
+            "Triage Inbox" if selected == "triage" else "Findings",
+            filters=filters,
+            page_number=page_number,
+            has_next=len(findings) > page_size,
+        )
+
+    @app.get("/findings/{finding_id}", response_class=HTMLResponse)
+    def finding_detail(finding_id: int, _: None = DashAuth) -> str:
+        finding = app.state.storage.get_finding(finding_id)
+        if finding is None:
+            raise HTTPException(status_code=404, detail="finding not found")
+        scan = app.state.storage.get_scan(finding["scan_id"])
+        return templates.finding_detail(finding, scan)
 
     @app.get("/endpoints", response_class=HTMLResponse)
     def endpoints(_: None = DashAuth) -> str:

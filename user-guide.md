@@ -92,9 +92,14 @@ Sign in, then open **Triage Inbox**. Flag, archive, suppress, or send a finding 
 
 Exports are CSV, Markdown, JSON, and Sentinel NDJSON. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with a single quote.
 
-Finding tables show at most 500 rows; the page states that limit. All four export
+Finding tables show 50 rows per page. Filter by exact hostname/rule ID, severity,
+or status; Next and Previous retain the selected filters. Click a finding title
+to see complete escaped evidence, first/last seen, occurrence count and the latest
+matching scan with separate collection/receipt times. Repeated identical evidence
+preserves review decisions, including Flagged. Changed evidence gets a separate
+finding. Empty results retain filter controls. All four export
 formats include the complete stored finding set, including archived and suppressed
-rows. Full exports are rendered in memory and can be large on a busy dashboard.
+rows, regardless of the current filters. Full exports are rendered in memory and can be large on a busy dashboard.
 
 ## Keep a bundle when upload fails
 
