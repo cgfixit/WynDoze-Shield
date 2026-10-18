@@ -14,7 +14,7 @@ from wyndoze_infoscanoverload.core.models import (
     SoftwareInfo,
 )
 from wyndoze_infoscanoverload.core.rulepacks import default_rule_pack
-from wyndoze_infoscanoverload.core.rules import evaluate
+from wyndoze_infoscanoverload.core.rules import evaluate, load_rule_pack
 
 
 def test_source_and_installed_rules_match():
@@ -90,3 +90,15 @@ def test_tunnel_substring_near_miss():
         installed_software=[SoftwareInfo(name="surfprint")],
     )
     assert "sw-tunnel-software" not in {f.rule_id for f in evaluate(report, default_rule_pack())}
+
+
+def test_legacy_unscoped_missing_service_keeps_empty_inventory_semantics():
+    pack = load_rule_pack("""name: legacy
+rules:
+  - id: expected
+    title: Expected service
+    kind: missing_expected_service
+    substrings: [custom-service]
+""")
+    report = ScanReport(hostname="H", scan_time_utc="2026-10-18T12:00:00Z")
+    assert [f.rule_id for f in evaluate(report, pack)] == ["expected"]

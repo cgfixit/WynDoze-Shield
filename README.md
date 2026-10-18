@@ -170,7 +170,7 @@ Every rule may declare `roles:` (scope to endpoint roles) and `technique:`
 (a MITRE ATT&CK id).
 
 Rules can also declare `platforms:`; the Windows service posture rules apply
-only to Windows and missing-service checks require a nonempty service inventory.
+only to Windows and those missing-service checks require a nonempty service inventory.
 Process/service presence is a review hint, not proof of malicious behavior.
 Recovery utilities and an idle Windows Update service are low-severity hints;
 short tunnel software names use whole-name matching to reduce incidental hits.
