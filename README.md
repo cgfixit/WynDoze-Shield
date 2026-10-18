@@ -4,7 +4,9 @@ A self-hosted agent and dashboard for endpoint inventory. Lightweight agents
 collect local telemetry. A loopback server classifies it with MITRE ATT&CK
 rules. An analyst works the findings through a triage inbox.
 
-Built and maintained by **CGFixIT**. Targets **Python 3.12 / 3.13**.
+Built and maintained by **CGFixIT**. Designed for **Windows 10, Windows 11,
+and Windows Server 2016, 2019, 2022, and 2025**, with **Python 3.12+**.
+These are compatibility targets; native acceptance on each OS is still required.
 
 ---
 
@@ -65,7 +67,8 @@ uv pip install -e ".[server,dev]"     # server + dev tooling
 uv pip install .
 ```
 
-On Windows 10 or Windows 11, `pyproject.toml` stays the source of truth.
+On the Windows targets above, `pyproject.toml` stays the source of truth.
+The commands below use Python 3.12, the minimum supported version.
 
 ```powershell
 py -3.12 -m venv .venv

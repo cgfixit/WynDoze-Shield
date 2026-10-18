@@ -1,6 +1,10 @@
 # Use WynDoze-InfoScanOverload on Windows
 
-This guide is for an operator on Windows 10 or Windows 11 with Python 3.12. It gets a loopback dashboard and one agent scan running. It does not register a scheduled task unless you run that script yourself.
+This guide targets Windows 10, Windows 11, and Windows Server 2016, 2019, 2022,
+and 2025 with Python 3.12 or newer. Examples use the minimum version, 3.12.
+Native acceptance is still required on each OS; this target list is not a
+certification. The guide gets a loopback dashboard and one agent scan running.
+It does not register a scheduled task unless you run that script yourself.
 
 The product is an internal scanner.
 
