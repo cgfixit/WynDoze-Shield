@@ -1,6 +1,6 @@
 # WynDoze-InfoScanOverload
 
-WynDoze-InfoScanOverload is a local inventory scanner for one operator. An agent reads names, ports, and account names on an endpoint. A loopback server scores that report with a YAML rule pack and stores the findings in SQLite. You work the results in a browser on the same machine. The agent does not call a vendor.
+WynDoze-InfoScanOverload is a local inventory scanner for one operator. An agent reads names, ports, and account names on an endpoint. A loopback server scores that report with a YAML rule pack and stores the findings in SQLite. You work the results in a browser on the same machine. The agent does not call a vendor. The YAML rules are project-authored heuristics mapped to MITRE ATT&CK® techniques.
 
 The desk is for judgment. Summary counts open the same triage and flagged set they display. The inbox is one card per finding. Flag returns to triage on the next matching scan. Archive and Suppress stay. Timeline lists scans. A scan page shows pattern names and a sealed-token count, and it does not print a command line. Exports are CSV, Markdown, JSON, and Sentinel NDJSON.
 
@@ -13,6 +13,17 @@ The agent is read-only. It does not read file contents, and it does not scan the
 Command lines are off. Pass `--cmdline` and set `RECON_AGENT_ENCRYPTION_KEY` when you want pattern names such as `encoded-powershell`. The agent replaces the line with a Fernet token before it writes or uploads the report. The dashboard does not decrypt that token.
 
 Upload uses HTTPS, or HTTP only to `127.0.0.1` or `::1`. The agent ignores proxy environment variables. If `RECON_INGEST_TOKEN` or `RECON_DASHBOARD_PASSWORD` is unset or empty, that side returns 401. `RECON_HOST` accepts only `127.0.0.1` and `::1`. Set `RECON_AGENT_DISABLE=1` to exit before collection. Bodies over 8 MiB are rejected with 413.
+
+Use the scanner only on systems you own or are authorized to assess. Inventory
+can identify people and machines through usernames, hostnames, addresses, and
+executable paths. Command lines are off by default; enabling them can capture
+embedded credentials in the encrypted text, which anyone holding the key can
+recover. Encryption is not anonymization or redaction.
+
+The SQLite database and plain JSON/CSV/Markdown exports are not encrypted by
+the application. Restrict access to them, use appropriate disk protection, and
+set your own retention/deletion policy. Do not attach real inventory, keys, or
+credentials to public issues. See [SECURITY.md](SECURITY.md) for private reporting.
 
 ## Install and start on Windows
 
@@ -125,4 +136,12 @@ pytest -q
 
 The layout is `src/wyndoze_infoscanoverload/core` for rules, `agent` for collection, and `server` for the dashboard.
 
-MIT license. MITRE ATT&CK is a trademark of The MITRE Corporation.
+The project's code is available under the [MIT license](LICENSE), without
+warranty. The static ATT&CK catalog includes third-party material covered by
+[MITRE's notice and license](NOTICE.md), which also ships in built packages.
+Dependencies retain their own licenses.
+
+MITRE ATT&CK® and ATT&CK® are registered trademarks of The MITRE Corporation.
+This independently maintained project is not affiliated with or endorsed by
+MITRE or any security/backup vendor. Its heuristic findings are leads for human
+review, not MITRE-certified detections or proof of compromise.
