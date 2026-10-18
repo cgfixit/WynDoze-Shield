@@ -255,9 +255,49 @@ agent.env
 *.token
 
 # Local clutter
-./
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 *.stackdump
+
+# Additional Python / Windows build outputs
+*.pyd
+*.dmp
+TestResults/
+junit*.xml
+
+# SQLite sidecars for the .sqlite and .db names ignored above
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Default local inventory and exported findings (may contain endpoint data)
+/report.json
+/out/
+/recon-findings.csv
+/recon-findings.md
+/recon-findings.json
+/recon-findings.sentinel
+
+# Local signing keys, credential stores, and secret-scanner reports
+*.pem
+*.pfx
+*.p12
+gitleaks-report.*
+gitleaks.sarif
+
+# Keep placeholder environment examples available to contributors
+!.env.example
+!.env.*.example
+!*.env.example
+
+# macOS / editor temporary files
+.DS_Store
+._*
+*.swp
+*.swo
+*~
 
