@@ -38,6 +38,7 @@ In a second shell, with the venv active:
 
 ```powershell
 $env:RECON_AGENT_TOKEN = "devtoken"
+$env:RECON_AGENT_ENCRYPTION_KEY = .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe gen-key
 .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe scan --server-url http://127.0.0.1:8000/api/scans --role workstation
 ```
 

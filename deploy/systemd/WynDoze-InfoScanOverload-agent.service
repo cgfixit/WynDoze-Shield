@@ -12,7 +12,7 @@ User=recon
 Group=recon
 
 # Secrets come from an environment file that is root-owned, chmod 600.
-# Contains: RECON_AGENT_TOKEN=... and (optional) RECON_AGENT_ENCRYPTION_KEY=...
+# Contains: RECON_AGENT_TOKEN=... and RECON_AGENT_ENCRYPTION_KEY=...
 EnvironmentFile=/etc/recon/agent.env
 
 # Adjust --role per host: backup_server | proxy | repository |

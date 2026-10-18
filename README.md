@@ -97,6 +97,7 @@ WynDoze-InfoScanOverload-server                     # listens on 127.0.0.1:8000
 
 ```bash
 export RECON_AGENT_TOKEN=devtoken           # any value in dev
+export RECON_AGENT_ENCRYPTION_KEY=$(WynDoze-InfoScanOverload-agent gen-key)
 WynDoze-InfoScanOverload-agent scan --server-url http://127.0.0.1:8000/api/scans --role backup_server
 ```
 
