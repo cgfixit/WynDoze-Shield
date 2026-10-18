@@ -1,4 +1,4 @@
-# WynDoze-InfoScanOverload default rule pack.
+#  WynDoze-InfoScanOverload default rule pack.
 # Reviewed v1.2. Heuristics mapped to MITRE ATT&CK; tuned against the engine
 # in core/rules.py (exact process-name match, service/software substring match).
 #
