@@ -60,6 +60,12 @@ Delete `report.json` when you are done. It contains host inventory. Every proces
 
 `--cmdline` also needs `RECON_AGENT_ENCRYPTION_KEY`. The agent checks the line in memory, keeps a short pattern name such as `encoded-powershell`, and replaces the line with a Fernet token before the report is written or uploaded. The dashboard does not need the key to score that pattern name. Anyone who has the key can decrypt the token. Keep the key off the server if you do not want the server to be able to read those lines.
 
+Pattern matching examines at most 800 characters. Before encryption, the stored
+prefix is also limited to 3000 UTF-8 bytes without splitting a character. This
+keeps non-ASCII command lines within the 4096-character token field so reports
+can be uploaded and replayed. A pattern label can describe text beyond the
+shorter stored prefix.
+
 ## Stop a scan
 
 Set the kill switch before you start the agent. The process exits 0 and writes nothing.

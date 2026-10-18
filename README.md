@@ -47,7 +47,7 @@ These are compatibility targets; native acceptance on each OS is still required.
 | Rule packs | Pure data via `yaml.safe_load`. Unknown severity fails the pack load. |
 | Transport | HTTPS, or HTTP only to `127.0.0.1` or `::1`. `httpx` ignores proxy env. |
 | Ingest size | Bodies larger than 8 MiB are rejected with 413 before SQLite writes. |
-| Process command lines | Not collected. The `cmdline` field stays null. |
+| Process command lines | Off by default. Opt-in lines require a key and are sealed before storage/upload; patterns inspect at most 800 characters, and encrypted text is limited to 3000 UTF-8 bytes on a character boundary. |
 
 If `RECON_INGEST_TOKEN` or `RECON_DASHBOARD_PASSWORD` is unset or empty, that
 endpoint returns 401. The server logs a warning at startup. There is no
