@@ -24,6 +24,10 @@ You should see `WynDoze-InfoScanOverload-agent.exe` and `WynDoze-InfoScanOverloa
 
 ## Start the dashboard
 
+The server requires FastAPI 0.143.0+. A missing database parent is created with
+access for its owner, SYSTEM, and Administrators. Existing directory permissions
+are preserved. ACL setup failures prevent database creation.
+
 Set both secrets. An unset or empty value returns 401.
 
 ```powershell
@@ -84,6 +88,13 @@ Set the kill switch before you start the agent. The process exits 0 and writes n
 $env:RECON_AGENT_DISABLE = "1"
 .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe scan --no-upload --output-json .\report.json --role workstation
 ```
+
+## Ingest limits
+
+The server authenticates before reading a report and returns 413 as soon as
+received body bytes exceed 8 MiB. Rejected reports are not evaluated or stored.
+This bounds accumulated application body bytes; transport buffers, the current
+ASGI chunk, concurrent requests, and valid JSON parsing also consume memory.
 
 ## Work the inbox
 
