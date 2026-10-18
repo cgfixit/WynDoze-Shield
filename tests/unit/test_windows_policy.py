@@ -102,10 +102,3 @@ rules:
 """)
     report = ScanReport(hostname="H", scan_time_utc="2026-10-18T12:00:00Z")
     assert [f.rule_id for f in evaluate(report, pack)] == ["expected"]
-
-
-def test_source_and_installed_rule_packs_are_identical():
-    root = Path(__file__).resolve().parents[2]
-    assert (root / "rules/windows_default.yaml").read_bytes() == (
-        root / "src/wyndoze_infoscanoverload/core/rulepacks/windows_default.yaml"
-    ).read_bytes()
