@@ -56,6 +56,7 @@ FastAPI telemetry flags are forced off inside `create_app`. `OTEL_SDK_DISABLED` 
 | `scan_time_utc` | 64 characters |
 | Short strings such as `exe` and `display_name` | 512 characters, clipped before the model is built |
 | Process list | 5000 on the model. The agent default `process_limit` is 1000 |
+| Opt-in command line | Patterns: first 800 characters. Encrypted prefix: at most 3000 UTF-8 bytes, ending on a character boundary; Fernet token fits 4096 characters |
 | Software list | The agent default `software_limit` is 2000. The second registry hive is not read after the limit is full |
 | Unknown model keys on platform, service, and software | Dropped |
 | Unknown rule severity | `RuleError` at pack load. Observations still coerce unknown values to `info` |
