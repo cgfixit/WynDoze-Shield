@@ -178,7 +178,7 @@ All configuration is environment-driven (Pydantic Settings).
 ## Rules engine
 
 Rules are declarative YAML. The source and bundled pack (`windows-default`, v1.2)
-ship the same **28 rules** across **7 rule kinds**. Command lines stay empty unless
+ship the same **28 rules** (CI checks the two copies byte-for-byte) across **7 rule kinds**. Command lines stay empty unless
 `--cmdline` is set, and then they are stored as Fernet tokens.
 
 Supported rule kinds:
