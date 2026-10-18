@@ -79,6 +79,8 @@ try {
     Assert-True $failed "ACL failure must stop installation"
     Assert-True ($null -eq $global:WynDozeTaskFixture) "ACL failure must not register"
     Assert-True (-not (Test-Path (Join-Path $badState "agent.env"))) "ACL failure must not write secrets"
+    # Expected failure probes leave LASTEXITCODE nonzero; assertions own fixture success.
+    $global:LASTEXITCODE = 0
     Write-Host "Task installer contract passed; no task or ACL was changed."
 } finally {
     Remove-Item -LiteralPath $root -Recurse -Force

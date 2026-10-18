@@ -303,6 +303,9 @@ def _eval_cmdline_flag(rule: Rule, report: ScanReport) -> list[str]:
 
 
 def _eval_missing_expected_service(rule: Rule, report: ScanReport) -> list[str]:
+    health = report.collection_health.get("services")
+    if health is not None and (health.status != "ok" or health.truncated):
+        return []
     if not report.services and "windows" in rule.platforms:
         return []
     present = " ".join(f"{s.name} {s.display_name}" for s in report.services).lower()

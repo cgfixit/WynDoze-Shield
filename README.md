@@ -55,7 +55,7 @@ changed evidence creates a separate finding for review.
 | Command execution | `subprocess` list-args only, never `shell=True`. Hard timeouts. |
 | Rule packs | Pure data via `yaml.safe_load`. Unknown severity fails the pack load. |
 | Transport | HTTPS, or HTTP only to `127.0.0.1` or `::1`. `httpx` ignores proxy env. |
-| Ingest size | Bodies larger than 8 MiB are rejected with 413 before SQLite writes. |
+| Ingest size | Authenticate first, then reject at the first streamed chunk crossing 8 MiB, before parsing or SQLite writes. |
 | Process command lines | Off by default. Opt-in lines require a key and are sealed before storage/upload; patterns inspect at most 800 characters, and encrypted text is limited to 3000 UTF-8 bytes on a character boundary. |
 
 If `RECON_INGEST_TOKEN` or `RECON_DASHBOARD_PASSWORD` is unset or empty, that
@@ -77,6 +77,10 @@ credentials to public issues. See [SECURITY.md](SECURITY.md) for private reporti
 ---
 
 ## Install
+
+Server installs require FastAPI 0.143.0 or newer. Startup creates a missing database
+parent directory privately; existing directories retain operator-managed permissions.
+If Windows ACL setup fails, startup stops before creating the database.
 
 ```bash
 # From the project root, using uv (recommended):
@@ -159,6 +163,17 @@ WynDoze-InfoScanOverload-agent evaluate-local report.json          # prints find
 
 All configuration is environment-driven (Pydantic Settings).
 
+### Collection health and freshness
+
+New reports include bounded status, item count, duration, truncation, and safe
+issue categories for each collector. The Endpoints page shows this coverage
+separately from collection age and receipt time. Older reports show unknown
+coverage. Replaying an old bundle does not make its inventory current.
+`RECON_STALE_AFTER_HOURS` defaults to 36 (1–8760); future or timezone-less scan
+timestamps show unknown freshness. Reaching a collection cap conservatively
+marks coverage partial. Missing-service rules do not infer absence from partial
+or failed service collection; positive observations still remain reviewable.
+
 ### Agent (`RECON_AGENT_*`)
 
 | Variable | Purpose |
@@ -171,7 +186,7 @@ All configuration is environment-driven (Pydantic Settings).
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `RECON_DB_PATH` | `WynDoze-InfoScanOverload.sqlite3` | SQLite database path |
+| `RECON_DB_PATH` | `%ProgramData%\WynDoze-InfoScanOverload\WynDoze-InfoScanOverload.sqlite3` on Windows; `./WynDoze-InfoScanOverload.sqlite3` elsewhere | SQLite database path |
 | `RECON_INGEST_TOKEN` | *(unset)* | Required bearer token for `/api/scans` |
 | `RECON_DASHBOARD_USER` | `admin` | Basic-auth username |
 | `RECON_DASHBOARD_PASSWORD` | *(unset)* | Required basic-auth password. Unset returns 401. |

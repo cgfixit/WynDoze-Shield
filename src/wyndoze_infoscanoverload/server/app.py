@@ -145,9 +145,11 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901, PLR0915 - cohesive ro
         authorization: Annotated[str | None, Header()] = None,
     ) -> dict[str, object]:
         _require_ingest_token(app, authorization)
-        body = await request.body()
-        if len(body) > _MAX_INGEST_BYTES:
-            raise HTTPException(status_code=413, detail="ingest body exceeds 8 MiB")
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > _MAX_INGEST_BYTES:
+                raise HTTPException(status_code=413, detail="ingest body exceeds 8 MiB")
+            body.extend(chunk)
         try:
             report = ScanReport.model_validate_json(body)
         except ValidationError as exc:
@@ -224,7 +226,9 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901, PLR0915 - cohesive ro
 
     @app.get("/endpoints", response_class=HTMLResponse)
     def endpoints(_: None = DashAuth) -> str:
-        return templates.endpoints_table(app.state.storage.list_endpoints())
+        return templates.endpoints_table(
+            app.state.storage.list_endpoints(app.state.config.stale_after_hours)
+        )
 
     # -- findings lifecycle ------------------------------------------------
     @app.post("/findings/{finding_id}/{action}", response_class=HTMLResponse)
