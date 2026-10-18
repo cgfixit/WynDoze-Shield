@@ -78,7 +78,15 @@ def test_exact_filters_and_empty_results_remain_usable(client):
 
 @pytest.mark.parametrize(
     "query",
-    ["page=0", "page=-1", "page=1.2", "status=unknown", "severity=urgent", "hostname=" + "x" * 256],
+    [
+        "page=0",
+        "page=-1",
+        "page=1.2",
+        "page=%3Cscript%3Ealert(1)%3C/script%3E",
+        "status=unknown",
+        "severity=urgent",
+        "hostname=" + "x" * 256,
+    ],
 )
 def test_invalid_parameters_are_rejected(client, query):
     assert client.get("/timeline?" + query, auth=AUTH).status_code == 422

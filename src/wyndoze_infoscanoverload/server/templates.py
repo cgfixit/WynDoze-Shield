@@ -193,7 +193,7 @@ def findings_table(
     body = (
         f"<h2>{escape(title)}</h2>"
         + _filters_form(filters)
-        + f"<p>Page {page_number}; {len(findings)} shown. "
+        + f"<p>Page {escape(str(page_number))}; {len(findings)} shown. "
         + " &middot; ".join(navigation)
         + "</p>"
         "<p class='muted'>Exports include all stored findings, regardless of these filters.</p>"

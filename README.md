@@ -29,6 +29,7 @@ rule filters. Finding titles open complete escaped evidence and matching-scan ti
 exports include every stored finding, including archived and suppressed rows.
 Full exports are rendered in memory, so their memory use grows with the result set.
 Exports include all stored findings regardless of the current dashboard filters.
+Page numbers start at 1; invalid page or filter values return HTTP 422.
 Recurring identical evidence preserves flagged, archived, and suppressed decisions;
 changed evidence creates a separate finding for review.
 
