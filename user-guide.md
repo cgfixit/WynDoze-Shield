@@ -82,6 +82,13 @@ Store that key outside the repo. On Windows the default cache directory is `%Pro
 
 For a machine with no route to the server, use `bundle`, move the `.WynDoze-InfoScanOverload-bundle` file, then `replay` with the same key and `RECON_AGENT_TOKEN`.
 
+Replay requires a matching HTTP 201 ingest acknowledgement before deleting a
+bundle. A redirect or invalid acknowledgement leaves it on disk. Corrupt or
+unreadable files stay in the cache and are reported without preventing later
+valid bundles from uploading; replay exits 1 if any file fails. Use `--keep` to
+retain successful uploads. Every save gets an exclusive filename, including
+multiple scans from the same host within one second.
+
 ## Schedule a daily scan
 
 Run `deploy\windows\Install-ReconAgentTask.ps1` only when you want a SYSTEM task. Set `RECON_AGENT_TOKEN` and `RECON_AGENT_ENCRYPTION_KEY` in that admin session first. The script writes `C:\ProgramData\WynDoze-InfoScanOverload\agent.env`, locks the file to SYSTEM and Administrators, and registers `ReconAgentDailyScan`. It does not write Machine environment variables.

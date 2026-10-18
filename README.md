@@ -115,6 +115,13 @@ export RECON_AGENT_TOKEN=<server token>
 WynDoze-InfoScanOverload-agent replay --server-url https://recon.internal/api/scans --cache-dir ./out
 ```
 
+Replay deletes a bundle only after HTTP 201 with an `accepted` acknowledgement,
+a positive scan ID, and the matching hostname. Redirects and malformed responses
+retain the bundle. Corrupt or unreadable bundles are reported individually while
+later valid bundles continue; any failure makes replay exit 1. Each save uses an
+exclusive filename so rapid scans cannot overwrite one another. `replay --keep`
+retains acknowledged bundles too.
+
 ### Evaluate a report locally (no server)
 
 ```bash
