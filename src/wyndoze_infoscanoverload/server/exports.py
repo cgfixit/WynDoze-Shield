@@ -1,8 +1,8 @@
 """Export findings to CSV, Markdown, JSON, and Microsoft Sentinel formats.
 
 The Sentinel exporter emits newline-delimited JSON shaped for a Log Analytics
-custom table (``Recon_CL``) — the same integration idea as the official
-product's Sentinel app, but self-hosted and dependency-free.
+custom table (``Recon_CL``). The operator is responsible for configuring
+ingestion into their own workspace.
 """
 
 from __future__ import annotations
