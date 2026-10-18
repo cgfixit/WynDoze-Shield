@@ -1,10 +1,11 @@
 # WynDoze-Shield
 
 A self-hosted agent and dashboard for endpoint inventory. Lightweight agents
-collect local telemetry. A loopback server classifies it with MITRE ATT&CK
-rules. An analyst works the findings through a triage inbox.
-
-Built and maintained by **CGFixIT**. Targets **Python 3.12 / 3.13**.
+collect local telemetry. A loopback server evaluates project-authored heuristics
+mapped to MITRE ATT&CK® techniques. An analyst reviews the findings in a triage inbox.
+ Designed for **Windows 10, Windows 11,
+and Windows Server 2016, 2019, 2022, and 2025**, with **Python 3.12+**.
+These are compatibility targets; native acceptance on each OS is still required.
 
 ---
 
@@ -23,11 +24,16 @@ Built and maintained by **CGFixIT**. Targets **Python 3.12 / 3.13**.
   are deduplicated per (host, rule, evidence) so recurring conditions bump a
   `seen_count` instead of spamming the inbox.
 
+Dashboard finding tables show at most 500 rows. CSV, Markdown, JSON, and Sentinel
+exports include every stored finding, including archived and suppressed rows.
+Full exports are rendered in memory, so their memory use grows with the result set.
+
 ### What it deliberately does **not** do
 
 - No file *contents* are ever read — only metadata (names, ports, service
   states, package names, admin account names).
-- No credentials, tokens, or secrets are collected.
+- No credential-store collection. Opt-in command lines can contain secrets;
+  retained lines are encrypted, not redacted.
 - No active network scanning — only local listening-socket state.
 - No outbound cloud calls except the single HTTPS upload to *your* server.
 
@@ -45,12 +51,23 @@ Built and maintained by **CGFixIT**. Targets **Python 3.12 / 3.13**.
 | Rule packs | Pure data via `yaml.safe_load`. Unknown severity fails the pack load. |
 | Transport | HTTPS, or HTTP only to `127.0.0.1` or `::1`. `httpx` ignores proxy env. |
 | Ingest size | Bodies larger than 8 MiB are rejected with 413 before SQLite writes. |
-| Process command lines | Not collected. The `cmdline` field stays null. |
+| Process command lines | Off by default. Opt-in lines require a key and are sealed before storage/upload; patterns inspect at most 800 characters, and encrypted text is limited to 3000 UTF-8 bytes on a character boundary. |
 
 If `RECON_INGEST_TOKEN` or `RECON_DASHBOARD_PASSWORD` is unset or empty, that
 endpoint returns 401. The server logs a warning at startup. There is no
 unauthenticated dev mode. Set `RECON_AGENT_DISABLE=1` to exit the agent before
 collection or upload. `RECON_HOST` accepts only `127.0.0.1` and `::1`.
+
+Use the scanner only on systems you own or are authorized to assess. Inventory
+can identify people and machines through usernames, hostnames, addresses, and
+executable paths. Command lines are off by default; enabling them can capture
+embedded credentials in the encrypted text, which anyone holding the key can
+recover. Encryption is not anonymization or redaction.
+
+The SQLite database and plain JSON/CSV/Markdown exports are not encrypted by
+the application. Restrict access to them, use appropriate disk protection, and
+set your own retention/deletion policy. Do not attach real inventory, keys, or
+credentials to public issues. See [SECURITY.md](SECURITY.md) for private reporting.
 
 ---
 
@@ -65,7 +82,8 @@ uv pip install -e ".[server,dev]"     # server + dev tooling
 uv pip install .
 ```
 
-On Windows 10 or Windows 11, `pyproject.toml` stays the source of truth.
+On the Windows targets above, `pyproject.toml` stays the source of truth.
+The commands below use Python 3.12, the minimum supported version.
 
 ```powershell
 py -3.12 -m venv .venv
@@ -96,7 +114,8 @@ WynDoze-InfoScanOverload-server                     # listens on 127.0.0.1:8000
 **2. Run an agent scan** against it:
 
 ```bash
-export RECON_AGENT_TOKEN=devtoken           # any value in dev
+export RECON_AGENT_TOKEN=devtoken           # must match RECON_INGEST_TOKEN
+export RECON_AGENT_ENCRYPTION_KEY=$(WynDoze-InfoScanOverload-agent gen-key)
 WynDoze-InfoScanOverload-agent scan --server-url http://127.0.0.1:8000/api/scans --role backup_server
 ```
 
@@ -114,6 +133,13 @@ export RECON_AGENT_ENCRYPTION_KEY=<same key>
 export RECON_AGENT_TOKEN=<server token>
 WynDoze-InfoScanOverload-agent replay --server-url https://recon.internal/api/scans --cache-dir ./out
 ```
+
+Replay deletes a bundle only after HTTP 201 with an `accepted` acknowledgement,
+a positive scan ID, and the matching hostname. Redirects and malformed responses
+retain the bundle. Corrupt or unreadable bundles are reported individually while
+later valid bundles continue; any failure makes replay exit 1. Each save uses an
+exclusive filename so rapid scans cannot overwrite one another. `replay --keep`
+retains acknowledged bundles too.
 
 ### Evaluate a report locally (no server)
 
@@ -156,8 +182,8 @@ All configuration is environment-driven (Pydantic Settings).
 
 ## Rules engine
 
-Rules are declarative YAML. The bundled pack (`windows-default`, v1.0) ships
-**17 rules** across **7 rule kinds**. Command lines stay empty unless
+Rules are declarative YAML. The source and bundled pack (`windows-default`, v1.2)
+ship the same **28 rules** (CI checks the two copies byte-for-byte) across **7 rule kinds**. Command lines stay empty unless
 `--cmdline` is set, and then they are stored as Fernet tokens.
 
 Supported rule kinds:
@@ -170,9 +196,25 @@ Supported rule kinds:
 | `software_present` | Installed software matches a substring |
 | `local_admin_unexpected` | A local admin not on the allow-list is present |
 | `missing_expected_service` | An expected service is absent |
+| `cmdline_flag` | An opted-in command line produced a matching pattern label; the server uses the label rather than decrypting text |
 
 Every rule may declare `roles:` (scope to endpoint roles) and `technique:`
-(a MITRE ATT&CK id). Example:
+(a MITRE ATT&CK id).
+
+Rules can also declare `platforms:`; the Windows service posture rules apply
+only to Windows and those missing-service checks require a nonempty service inventory.
+Process/service presence is a review hint, not proof of malicious behavior.
+Recovery utilities and an idle Windows Update service are low-severity hints;
+short tunnel software names use whole-name matching to reduce incidental hits.
+
+Windows reports retain administrator display names and add a bounded
+`local_admin_sids` mapping. The bundled admin rule accepts account-domain RIDs
+500 (built-in Administrator, including renamed/localized accounts) and 512
+(Domain Admins), plus its explicit name allowlist. A qualified name alone is
+never stripped to a trusted basename. Older reports without SIDs still use
+explicit name matches; tune qualified allowlist entries for other approved accounts.
+
+Example:
 
 ```yaml
 name: windows-default
@@ -203,6 +245,9 @@ See [`deploy/`](deploy/):
   `C:\ProgramData\WynDoze-InfoScanOverload\agent.env` and locks that file to SYSTEM and
   Administrators. This tree does not register the task for you.
   The dashboard database defaults to `C:\ProgramData\WynDoze-InfoScanOverload\WynDoze-InfoScanOverload.sqlite3`.
+  Use the installed agent `.exe` shim for `-PythonExe`. The daily trigger adds
+  up to 30 minutes of random delay. The UTF-8 wrapper quotes paths and passes
+  the agent exit code to Task Scheduler; ACL failures stop installation.
 
 Operator guides: [user-guide.md](user-guide.md) and [feature.map.md](feature.map.md).
 
@@ -233,5 +278,12 @@ src/wyndoze_infoscanoverload/
 
 ## License / status
 
-Internal tool, provided as-is with no warranty. MITRE ATT&CK is a registered
-trademark of The MITRE Corporation.
+The project's code is available under the [MIT license](LICENSE), without
+warranty. The static ATT&CK catalog includes third-party material covered by
+[MITRE's notice and license](NOTICE.md), which also ships in built packages.
+Dependencies retain their own licenses.
+
+MITRE ATT&CK® and ATT&CK® are registered trademarks of The MITRE Corporation.
+This independently maintained project is not affiliated with or endorsed by
+MITRE or any security/backup vendor. Its heuristic findings are leads for human
+review, not MITRE-certified detections or proof of compromise.

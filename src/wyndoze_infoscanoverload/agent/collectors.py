@@ -13,6 +13,7 @@ Security invariants (do not weaken without review):
 
 from __future__ import annotations
 
+import json
 import logging
 import platform
 import socket
@@ -61,7 +62,12 @@ def _clip(value: object, limit: int = _SHORT_LEN) -> str | None:
 
 def local_admin_argv() -> list[str]:
     """Argv for local Administrators. The SID is stable. The group name is not."""
-    script = f"Get-LocalGroupMember -SID '{_ADMIN_SID}' | ForEach-Object {{ $_.Name }}"
+    script = (
+        "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
+        "ConvertTo-Json -Compress -InputObject @("
+        f"Get-LocalGroupMember -SID '{_ADMIN_SID}' | "
+        "Select-Object Name,@{Name='Sid';Expression={$_.SID.Value}})"
+    )
     return [
         "powershell.exe",
         "-NoProfile",
@@ -312,9 +318,27 @@ def _parse_pkg_lines(text: str, source: str, limit: int) -> list[SoftwareInfo]:
 
 def collect_local_admins(timeout: int) -> list[str]:
     """Collect local administrator / sudo-capable accounts (names only)."""
+    return _collect_local_admin_identities(timeout)[0]
+
+
+def _collect_local_admin_identities(timeout: int) -> tuple[list[str], dict[str, str]]:
+    """Keep display names and Windows SIDs from the same bounded snapshot."""
     if _IS_WINDOWS:
-        output = _run_command(local_admin_argv(), timeout=timeout, encoding="oem")
-        return [line.strip() for line in output.splitlines() if line.strip()]
+        output = _run_command(local_admin_argv(), timeout=timeout, encoding="utf-8-sig")
+        try:
+            rows = json.loads(output)
+        except ValueError:
+            return [], {}
+        if not isinstance(rows, list):
+            return [], {}
+        identities = {
+            str(row["Name"])[:_SHORT_LEN]: str(row["Sid"])[:_SHORT_LEN]
+            for row in rows[:1000]
+            if isinstance(row, dict)
+            and isinstance(row.get("Name"), str)
+            and isinstance(row.get("Sid"), str)
+        }
+        return list(identities), identities
     if _IS_LINUX:
         # Members of the sudo/wheel groups. Names only — never passwords.
         members: set[str] = set()
@@ -323,8 +347,8 @@ def collect_local_admins(timeout: int) -> list[str]:
             if ":" in out:
                 tail = out.rsplit(":", 1)[-1].strip()
                 members.update(m for m in tail.split(",") if m)
-        return sorted(members)
-    return []
+        return sorted(members), {}
+    return [], {}
 
 
 def _local_observations(report: ScanReport) -> list[Observation]:
@@ -356,6 +380,7 @@ def collect_report(config: AgentConfig) -> ScanReport:
     if config.collect_cmdline and not config.encryption_key:
         msg = "command lines require an encryption key"
         raise ValueError(msg)
+    admins, admin_sids = _collect_local_admin_identities(config.command_timeout_s)
     report = ScanReport(
         scan_time_utc=utc_now_iso(),
         hostname=socket.gethostname(),
@@ -363,13 +388,12 @@ def collect_report(config: AgentConfig) -> ScanReport:
         role=config.role or EndpointRole.UNKNOWN,
         platform=collect_platform(),
         ip_addresses=collect_ip_addresses(),
-        processes=collect_processes(
-            config.process_limit, include_cmdline=config.collect_cmdline
-        ),
+        processes=collect_processes(config.process_limit, include_cmdline=config.collect_cmdline),
         listening_connections=collect_listening_connections(config.connection_limit),
         services=collect_services(config.service_limit, config.command_timeout_s),
         installed_software=collect_software(config.software_limit, config.command_timeout_s),
-        local_admins=collect_local_admins(config.command_timeout_s),
+        local_admins=admins,
+        local_admin_sids=admin_sids,
     )
     if config.collect_cmdline and config.encryption_key:
         seal_command_lines(report, config.encryption_key)

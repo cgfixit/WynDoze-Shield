@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import pytest
+
+from wyndoze_infoscanoverload.agent.cache import BundleCache
 from wyndoze_infoscanoverload.agent.cmdline import seal_command_lines
 from wyndoze_infoscanoverload.agent.collectors import collect_processes
-from wyndoze_infoscanoverload.agent.crypto import generate_key
+from wyndoze_infoscanoverload.agent.crypto import decrypt_bytes, generate_key
 from wyndoze_infoscanoverload.core.models import ProcessInfo, ScanReport
 from wyndoze_infoscanoverload.core.rulepacks import default_rule_pack
 from wyndoze_infoscanoverload.core.rules import evaluate
@@ -18,7 +23,12 @@ def _report(cmdline: str | None) -> ScanReport:
     )
 
 
-def test_default_collection_omits_cmdline() -> None:
+def test_default_collection_omits_cmdline(monkeypatch) -> None:
+    def processes(attrs):
+        assert "cmdline" not in attrs
+        return [SimpleNamespace(info={"pid": 1, "name": "synthetic.exe", "cmdline": ["private"]})]
+
+    monkeypatch.setattr("wyndoze_infoscanoverload.agent.collectors.psutil.process_iter", processes)
     rows = collect_processes(30)
     assert all(row.cmdline is None for row in rows)
 
@@ -59,3 +69,25 @@ def test_cmdline_flag_rule_uses_label_only() -> None:
     hit = next(item for item in findings if item.rule_id == "cmd-suspicious-line")
     assert "SECRETTOKEN" not in hit.message
     assert all("SECRETTOKEN" not in piece for piece in hit.evidence)
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["🙂" * 800, "é" * 800, "🙂" * 770 + " powershell -enc x"],
+    ids=["four-byte", "two-byte", "late-pattern"],
+)
+def test_unicode_command_line_wire_and_cache_roundtrip(tmp_path, line):
+    key = generate_key()
+    report = _report(line)
+    seal_command_lines(report, key)
+    token = report.processes[0].cmdline
+    assert token is not None
+    assert len(token) <= 4096
+    plain = decrypt_bytes(token.encode("ascii"), key).decode("utf-8")
+    assert line.startswith(plain)
+    assert plain
+    if "-enc" in line:
+        assert "encoded-powershell" in report.cmdline_flags
+    ScanReport.model_validate_json(report.model_dump_json())
+    cache = BundleCache(tmp_path, key)
+    assert cache.load(cache.save(report)).processes[0].cmdline == token

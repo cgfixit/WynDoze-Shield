@@ -24,7 +24,7 @@ from wyndoze_infoscanoverload._version import __version__
 from wyndoze_infoscanoverload.agent.cache import BUNDLE_SUFFIX, BundleCache
 from wyndoze_infoscanoverload.agent.collectors import collect_report
 from wyndoze_infoscanoverload.agent.config import AgentConfig
-from wyndoze_infoscanoverload.agent.crypto import generate_key
+from wyndoze_infoscanoverload.agent.crypto import CryptoError, generate_key
 from wyndoze_infoscanoverload.agent.uploader import UploadError, assert_upload_url, upload_report
 from wyndoze_infoscanoverload.core.models import EndpointRole, ScanReport
 from wyndoze_infoscanoverload.core.rulepacks import default_rule_pack
@@ -291,7 +291,7 @@ def replay(
                 timeout_s=config.upload_timeout_s,
                 verify_tls=config.verify_tls,
             )
-        except (UploadError, ValueError) as exc:
+        except (UploadError, CryptoError, OSError, ValueError) as exc:
             failed += 1
             typer.secho(f"  {path.name}: FAILED ({exc})", fg=typer.colors.YELLOW, err=True)
             continue

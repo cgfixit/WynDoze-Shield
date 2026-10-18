@@ -25,8 +25,8 @@ Hostname = Annotated[str, Field(min_length=1, max_length=255)]
 class EndpointRole(StrEnum):
     """Role an endpoint plays in the backup estate.
 
-    Mirrors the asset types the official Recon workflow emphasises (backup
-    server, proxy, repository, etc.) so rules can be role-scoped.
+    Rules can be scoped to backup servers, proxies, repositories, workstations,
+    and the other roles listed below.
     """
 
     UNKNOWN = "unknown"
@@ -145,6 +145,7 @@ class ScanReport(BaseModel):
     services: list[ServiceInfo] = Field(default_factory=list, max_length=5000)
     installed_software: list[SoftwareInfo] = Field(default_factory=list, max_length=5000)
     local_admins: list[ShortStr] = Field(default_factory=list, max_length=1000)
+    local_admin_sids: dict[ShortStr, ShortStr] = Field(default_factory=dict, max_length=1000)
     cmdline_flags: list[ShortStr] = Field(default_factory=list, max_length=32)
     observations: list[Observation] = Field(default_factory=list, max_length=5000)
 
@@ -160,8 +161,8 @@ class ScanReport(BaseModel):
 class FindingStatus(StrEnum):
     """Lifecycle of a server-side finding.
 
-    Mirrors the official Recon event states: fresh findings land in the triage
-    inbox; operators can flag, archive, or suppress them.
+    Fresh findings land in the triage inbox; operators can flag, archive,
+    or suppress them.
     """
 
     TRIAGE = "triage"

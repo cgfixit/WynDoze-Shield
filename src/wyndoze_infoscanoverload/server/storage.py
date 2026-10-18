@@ -12,9 +12,8 @@ Three tables:
     the triage lifecycle status. Deduplicated per (host, rule, evidence) so a
     recurring condition does not spam the triage inbox.
 
-SQLite is fine for the MVP / small estates (the official product supports 10
-endpoints). For larger scale, swap this module for a PostgreSQL-backed one —
-the rest of the app depends only on this interface.
+SQLite stores local inventory and triage state. Capacity depends on inventory
+volume, retention, and the host; no endpoint-count guarantee is implied.
 """
 
 from __future__ import annotations
@@ -239,8 +238,10 @@ class Storage:
             rows = conn.execute("SELECT * FROM endpoints ORDER BY last_seen_utc DESC").fetchall()
         return [dict(r) for r in rows]
 
-    def list_findings(self, status: str | None = None, limit: int = 500) -> list[dict[str, Any]]:
-        """Return findings (optionally filtered by status), severity-sorted."""
+    def list_findings(
+        self, status: str | None = None, limit: int | None = 500
+    ) -> list[dict[str, Any]]:
+        """Return sorted findings; None explicitly selects all rows for exports."""
         query = "SELECT * FROM findings"
         params: list[Any] = []
         if status:
@@ -252,9 +253,10 @@ class Storage:
                 WHEN 'critical' THEN 4 WHEN 'high' THEN 3
                 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC,
             last_seen_utc DESC
-            LIMIT ?
         """
-        params.append(limit)
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return [_row_to_finding(dict(r)) for r in rows]

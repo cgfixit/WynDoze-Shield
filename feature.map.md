@@ -11,6 +11,12 @@ Reference for the working tree at version 1.0.0. Behavior below matches the code
 
 Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and `version`.
 
+The source and installed Windows pack are identical v1.2 with 28 rules.
+Windows admin display names retain a bounded `local_admin_sids` mapping;
+the admin policy recognizes account-domain RIDs 500/512, rather than trusting
+an arbitrary qualified account's basename. Windows service posture rules are
+platform-scoped and empty service inventories do not prove a missing service.
+
 ## Server routes
 
 | Route | Auth | Result |
@@ -23,6 +29,9 @@ Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and 
 | `/docs`, `/redoc`, `/openapi.json` | none | 404 |
 
 Actions are `flag`, `archive`, `suppress`, and `triage`.
+
+Finding tables are limited to 500 rows. Authenticated CSV, Markdown, JSON, and
+Sentinel exports include all stored findings and are rendered in memory.
 
 ## Agent environment
 
@@ -56,6 +65,7 @@ FastAPI telemetry flags are forced off inside `create_app`. `OTEL_SDK_DISABLED` 
 | `scan_time_utc` | 64 characters |
 | Short strings such as `exe` and `display_name` | 512 characters, clipped before the model is built |
 | Process list | 5000 on the model. The agent default `process_limit` is 1000 |
+| Opt-in command line | Patterns: first 800 characters. Encrypted prefix: at most 3000 UTF-8 bytes, ending on a character boundary; Fernet token fits 4096 characters |
 | Software list | The agent default `software_limit` is 2000. The second registry hive is not read after the limit is full |
 | Unknown model keys on platform, service, and software | Dropped |
 | Unknown rule severity | `RuleError` at pack load. Observations still coerce unknown values to `info` |
@@ -66,4 +76,7 @@ Windows software comes from `reg.exe` with `/reg:64` and `/reg:32`, decoded as O
 
 ## Not in this tree
 
-There is no Docker deploy path in this tree. There is no git remote. The scheduled task script is present and was not executed.
+There is no Docker deploy path in this tree. The Windows installer explicitly
+registers a daily SYSTEM task with up to 30 minutes of trigger jitter when an
+operator runs it. Its wrapper returns the agent exit code. Verification uses
+synthetic state and mocked task registration; it does not install a task.

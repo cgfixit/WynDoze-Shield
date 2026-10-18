@@ -1,9 +1,9 @@
-"""A small, offline MITRE ATT&CK technique catalog.
+"""A small, offline MITRE ATT&CK® technique catalog.
 
-The official Recon product classifies detections against the MITRE ATT&CK
-framework. We ship a curated, static subset relevant to the checks this MVP
-performs. IDs and names are stable public identifiers; the catalog is
-intentionally tiny and hand-maintained rather than a full framework mirror.
+This static subset maps the project's own inventory heuristics to ATT&CK
+technique IDs, names, and tactics. It is hand-maintained, not a full framework
+mirror or a set of MITRE-authored detection rules. See NOTICE.md for the
+MITRE copyright notice and license distributed with this catalog.
 
 Reference: https://attack.mitre.org/
 """

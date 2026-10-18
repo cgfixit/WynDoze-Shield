@@ -5,7 +5,7 @@ When an upload fails (or the endpoint is isolated), the report is written to
 jumpbox tooling on a machine with internet access — can replay the cache.
 
 File format: raw Fernet token of the UTF-8 JSON report. One report per file.
-Filenames are ``{hostname}-{timestamp}.WynDoze-InfoScanOverload-bundle`` so they sort by time.
+Filenames include the hostname, timestamp, and an exclusive random suffix.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -75,11 +76,21 @@ class BundleCache:
         """Encrypt and persist ``report``; return the bundle path."""
         self._dir.mkdir(parents=True, exist_ok=True)
         timestamp = report.scan_time_utc.replace(":", "").replace("-", "")[:15]
-        name = f"{_safe_component(report.hostname)}-{_safe_component(timestamp)}{BUNDLE_SUFFIX}"
-        path = self._dir / name
         payload = report.model_dump_json().encode("utf-8")
-        path.write_bytes(encrypt_bytes(payload, self._key))
-        _restrict_bundle(path)
+        token = encrypt_bytes(payload, self._key)
+        descriptor, name = tempfile.mkstemp(
+            prefix=f"{_safe_component(report.hostname)}-{_safe_component(timestamp)}-",
+            suffix=BUNDLE_SUFFIX,
+            dir=self._dir,
+        )
+        path = Path(name)
+        try:
+            with os.fdopen(descriptor, "wb") as bundle:
+                bundle.write(token)
+            _restrict_bundle(path)
+        except (OSError, subprocess.SubprocessError):
+            path.unlink(missing_ok=True)
+            raise
         logger.info("Saved encrypted bundle: %s", path.name)
         return path
 

@@ -219,7 +219,7 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - cohesive route table
         if not exporter:
             raise HTTPException(status_code=404, detail="unknown export format")
         render, media_type = exporter
-        findings = app.state.storage.list_findings()
+        findings = app.state.storage.list_findings(limit=None)
         content = render(findings)
         filename = f"recon-findings.{fmt}"
         return PlainTextResponse(

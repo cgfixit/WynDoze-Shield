@@ -21,7 +21,7 @@
     jumpbox | workstation | other
 
 .PARAMETER PythonExe
-    Path to the venv python or the WynDoze-InfoScanOverload-agent.exe shim.
+    Path to the installed WynDoze-InfoScanOverload-agent.exe shim.
 
 .EXAMPLE
     .\Install-ReconAgentTask.ps1 -ServerUrl https://recon.local/api/scans `
@@ -52,6 +52,7 @@ function Protect-ReconPath {
     param([Parameter(Mandatory = $true)][string] $Path, [switch] $Directory)
     $rights = if ($Directory) { "(OI)(CI)F" } else { "F" }
     & icacls.exe $Path /inheritance:r /grant:r "*S-1-5-18:$rights" "*S-1-5-32-544:$rights" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not protect task state path: $Path" }
 }
 
 $token = [Environment]::GetEnvironmentVariable("RECON_AGENT_TOKEN", "Process")
@@ -84,12 +85,13 @@ Protect-ReconPath -Path $envFile
     "    }"
     "}"
     "& $quotedExe scan --server-url $quotedUrl --role $Role --cache-dir $quotedCache"
-) | Set-Content -LiteralPath $wrapper -Encoding ascii
+    'exit $LASTEXITCODE'
+) | Set-Content -LiteralPath $wrapper -Encoding UTF8
 Protect-ReconPath -Path $wrapper
 
-$taskArguments = "-NoProfile -NonInteractive -File $(ConvertTo-QuotedArg $wrapper)"
+$taskArguments = "-NoProfile -NonInteractive -File `"$wrapper`""
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $taskArguments
-$trigger = New-ScheduledTaskTrigger -Daily -At $At
+$trigger = New-ScheduledTaskTrigger -Daily -At $At -RandomDelay (New-TimeSpan -Minutes 30)
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" `
     -LogonType ServiceAccount -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet `
@@ -97,7 +99,6 @@ $settings = New-ScheduledTaskSettingsSet `
     -DontStopOnIdleEnd `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
-    -RandomDelay (New-TimeSpan -Minutes 30) `
     -ExecutionTimeLimit (New-TimeSpan -Hours 1)
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `

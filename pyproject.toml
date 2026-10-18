@@ -60,6 +60,7 @@ ignore = [
   "D203", "D213", "COM812", "ISC001",
   "D100", "D104", "D105", "D107",
   "ANN401",  # allow Any at documented boundaries (telemetry blobs)
+  "CPY001", # licensing is declared in LICENSE, not per-file copyright headers
   "PLR0913", # collectors legitimately take several tunables
   "TD", "FIX", # todo comment lints not useful here
   # Pydantic v2 + FastAPI resolve annotations at runtime, so imports used only
@@ -70,9 +71,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "PLR2004", "ANN", "D", "SLF001", "INP001", "PIE810"]
 "src/wyndoze_infoscanoverload/server/templates.py" = ["E501"]
-# Typer models CLI flags as boolean parameters; the "boolean trap" lints do not
-# apply to a command-line interface where each flag is self-documenting.
-"src/wyndoze_infoscanoverload/agent/cli.py" = ["FBT001", "FBT002"]
+# Typer exposes these parameters as named CLI options, including booleans.
+"src/wyndoze_infoscanoverload/agent/cli.py" = ["FBT001", "FBT002", "PLR0917"]
 
 [tool.ruff.lint.flake8-bandit]
 check-typed-exception = true
