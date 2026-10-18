@@ -49,7 +49,7 @@ def test_missing_expected_service_fires_per_absent_name(clean_report: ScanReport
               kind: missing_expected_service
               title: Posture
               severity: low
-              substrings: [defender, veeam]
+              substrings: [defender, backup]
             """
         )
     )
@@ -57,12 +57,12 @@ def test_missing_expected_service_fires_per_absent_name(clean_report: ScanReport
         update={"services": [ServiceInfo(name="WinDefend", display_name="Microsoft Defender")]}
     )
     (finding,) = evaluate(report, pack)
-    assert finding.evidence == ["expected service matching 'veeam' not found"]
+    assert finding.evidence == ["expected service matching 'backup' not found"]
     both = report.model_copy(
         update={
             "services": [
                 *report.services,
-                ServiceInfo(name="VeeamBackupSvc", display_name="Veeam Backup Service"),
+                ServiceInfo(name="BackupSvc", display_name="Backup Service"),
             ]
         }
     )

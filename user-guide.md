@@ -4,7 +4,7 @@ This guide is for an operator on Windows 10 or Windows 11 with Python 3.12. It g
 
 These commands do not run on macOS. Use the macOS block in [README.md](README.md). On macOS the agent still collects processes and listening ports. Services, installed software, and local administrator names stay empty, because those collectors run on Windows and on Linux. There is no Mac scheduled-task script in this tree. `windows-latest` is a GitHub Actions image name, not a desktop edition. The task script below is for Windows 10 and Windows 11.
 
-The product is an internal scanner.
+Use this scanner only on systems you own or are authorized to assess.
 
 ## Open the window
 
@@ -63,7 +63,17 @@ To collect without uploading:
 
 Delete `report.json` when you are done. It contains host inventory. Every process row has `cmdline` set to null unless you pass `--cmdline`.
 
+Inventory can contain usernames, hostnames, addresses, and executable paths.
+The application does not encrypt its SQLite database or plain exports. Protect
+those files and backups, decide how long to keep them, and do not post real
+inventory or credentials in public issues. Use [private security reporting](SECURITY.md)
+for suspected vulnerabilities.
+
 `--cmdline` also needs `RECON_AGENT_ENCRYPTION_KEY`. The agent checks the line in memory, keeps a short pattern name such as `encoded-powershell`, and replaces the line with a Fernet token before the report is written or uploaded. The dashboard does not need the key to score that pattern name. Anyone who has the key can decrypt the token. Keep the key off the server if you do not want the server to be able to read those lines.
+
+Command lines may include passwords or tokens supplied to other programs.
+Sealing encrypts the retained text; it does not redact embedded secrets. Leave
+command-line collection off unless you need it and have authorized its use.
 
 ## Stop a scan
 
