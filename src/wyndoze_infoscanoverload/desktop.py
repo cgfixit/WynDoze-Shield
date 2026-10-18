@@ -66,8 +66,11 @@ def documentation_message(root: Path) -> tuple[Path, str]:
     path = root / "documentation.pdf"
     if not path.is_file():
         return path, "documentation.pdf is not in the project folder yet."
-    if os.name == "nt":
-        os.startfile(path)  # noqa: S606 - the operator asked to open this local PDF
+    # os.startfile exists only on Windows. A probe type-checks on both CI legs;
+    # an os.name or sys.platform branch fails mypy on one of them.
+    startfile = getattr(os, "startfile", None)
+    if startfile is not None:
+        startfile(path)  # the operator asked to open this local PDF
         return path, "Opened documentation.pdf."
     return path, "Open documentation.pdf from the project folder."
 
