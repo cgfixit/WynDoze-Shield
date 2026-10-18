@@ -10,11 +10,8 @@
     starts WynDoze-InfoScanOverload-agent.exe. Nothing is written with Set-Item to Machine scope.
 
     Set these in the current session before you run this script as admin:
-        $env:RECON_AGENT_TOKEN = "<token>"
-        $env:RECON_AGENT_ENCRYPTION_KEY = "<key>"
 
 .PARAMETER ServerUrl
-    Ingest endpoint, e.g. https://recon.example.internal/api/scans
 
 .PARAMETER Role
     Endpoint role: backup_server | proxy | repository | domain_controller |
@@ -24,8 +21,6 @@
     Path to the installed WynDoze-InfoScanOverload-agent.exe shim.
 
 .EXAMPLE
-    .\Install-ReconAgentTask.ps1 -ServerUrl https://recon.local/api/scans `
-        -Role backup_server -PythonExe C:\recon\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe
 #>
 [CmdletBinding()]
 param(
@@ -36,7 +31,7 @@ param(
     [string] $Role,
     [Parameter(Mandatory = $true)] [string] $PythonExe,
     [string] $CacheDir = "C:\ProgramData\WynDoze-InfoScanOverload\cache",
-    [string] $TaskName = "ReconAgentDailyScan",
+    [string] $TaskName = "ScanzAgentDailyScan",
     [string] $At = "02:30",
     [string] $StateDir = "C:\ProgramData\WynDoze-InfoScanOverload"
 )
@@ -48,34 +43,34 @@ function ConvertTo-QuotedArg {
     return "'" + $Value.Replace("'", "''") + "'"
 }
 
-function Protect-ReconPath {
+function Protect-ScanzPath {
     param([Parameter(Mandatory = $true)][string] $Path, [switch] $Directory)
     $rights = if ($Directory) { "(OI)(CI)F" } else { "F" }
     & icacls.exe $Path /inheritance:r /grant:r "*S-1-5-18:$rights" "*S-1-5-32-544:$rights" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not protect task state path: $Path" }
 }
 
-$token = [Environment]::GetEnvironmentVariable("RECON_AGENT_TOKEN", "Process")
-$key = [Environment]::GetEnvironmentVariable("RECON_AGENT_ENCRYPTION_KEY", "Process")
+$token = [Environment]::GetEnvironmentVariable("Scanz_AGENT_TOKEN", "Process")
+$key = [Environment]::GetEnvironmentVariable("Scanz_AGENT_ENCRYPTION_KEY", "Process")
 if (-not $token -or -not $key) {
-    throw "Set RECON_AGENT_TOKEN and RECON_AGENT_ENCRYPTION_KEY in this session before registering the task."
+    throw "Set Scanz_AGENT_TOKEN and Scanz_AGENT_ENCRYPTION_KEY in this session before registering the task."
 }
 
 New-Item -ItemType Directory -Force -Path $StateDir, $CacheDir | Out-Null
-Protect-ReconPath -Path $StateDir -Directory
+Protect-ScanzPath -Path $StateDir -Directory
 
 $envFile = Join-Path $StateDir "agent.env"
-$wrapper = Join-Path $StateDir "Invoke-ReconAgentScan.ps1"
+$wrapper = Join-Path $StateDir "Invoke-ScanzAgentScan.ps1"
 $quotedUrl = ConvertTo-QuotedArg $ServerUrl
 $quotedCache = ConvertTo-QuotedArg $CacheDir
 $quotedExe = ConvertTo-QuotedArg $PythonExe
 $quotedEnv = ConvertTo-QuotedArg $envFile
 
 @(
-    "RECON_AGENT_TOKEN=$token"
-    "RECON_AGENT_ENCRYPTION_KEY=$key"
+    "Scanz_AGENT_TOKEN=$token"
+    "Scanz_AGENT_ENCRYPTION_KEY=$key"
 ) | Set-Content -LiteralPath $envFile -Encoding ascii
-Protect-ReconPath -Path $envFile
+Protect-ScanzPath -Path $envFile
 
 @(
     '$ErrorActionPreference = "Stop"'
@@ -87,7 +82,7 @@ Protect-ReconPath -Path $envFile
     "& $quotedExe scan --server-url $quotedUrl --role $Role --cache-dir $quotedCache"
     'exit $LASTEXITCODE'
 ) | Set-Content -LiteralPath $wrapper -Encoding UTF8
-Protect-ReconPath -Path $wrapper
+Protect-ScanzPath -Path $wrapper
 
 $taskArguments = "-NoProfile -NonInteractive -File `"$wrapper`""
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $taskArguments
