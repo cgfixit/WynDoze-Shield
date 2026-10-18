@@ -73,6 +73,10 @@ credentials to public issues. See [SECURITY.md](SECURITY.md) for private reporti
 
 ## Install
 
+Server installs require FastAPI 0.143.0 or newer. Startup creates a missing database
+parent directory privately; existing directories retain operator-managed permissions.
+If Windows ACL setup fails, startup stops before creating the database.
+
 ```bash
 # From the project root, using uv (recommended):
 uv venv --python 3.12
@@ -166,7 +170,7 @@ All configuration is environment-driven (Pydantic Settings).
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `RECON_DB_PATH` | `WynDoze-InfoScanOverload.sqlite3` | SQLite database path |
+| `RECON_DB_PATH` | `%ProgramData%\WynDoze-InfoScanOverload\WynDoze-InfoScanOverload.sqlite3` on Windows; `./WynDoze-InfoScanOverload.sqlite3` elsewhere | SQLite database path |
 | `RECON_INGEST_TOKEN` | *(unset)* | Required bearer token for `/api/scans` |
 | `RECON_DASHBOARD_USER` | `admin` | Basic-auth username |
 | `RECON_DASHBOARD_PASSWORD` | *(unset)* | Required basic-auth password. Unset returns 401. |
