@@ -55,13 +55,16 @@ Sentinel exports include all stored findings and are rendered in memory.
 | `RECON_HOST` | `127.0.0.1` | Only `127.0.0.1` or `::1` |
 | `RECON_PORT` | `8000` | Listen port |
 
+Startup creates a missing database parent privately and preserves existing directory
+permissions. Server/development FastAPI floors are 0.143.0.
+
 FastAPI telemetry flags are forced off inside `create_app`. `OTEL_SDK_DISABLED` is set to `true`.
 
 ## Limits
 
 | Item | Limit |
 |---|---|
-| Ingest body | 8 MiB, then 413 |
+| Ingest body | Authenticate first; count streamed bytes before retaining them; 413 at the first chunk crossing 8 MiB |
 | `scan_time_utc` | 64 characters |
 | Short strings such as `exe` and `display_name` | 512 characters, clipped before the model is built |
 | Process list | 5000 on the model. The agent default `process_limit` is 1000 |
