@@ -145,15 +145,13 @@ _Required on every PR, including a lone one (write "independent, only open PR").
 - **If a PR is Dirty:** prefer a local rebase (or `git rebase --onto origin/main <old-parent-tip> <branch>` for a stacked child whose parent was squash-merged) over GitHub's "Update branch" button. Force-pushing a rebased branch is fine only on a branch that is yours alone, with `--force-with-lease`, and with the owner's OK.
 
 ```markdown
-**#45** · Safe ✅  
+**#45** · Safe 
 Impact: Base skill prompts + routing. No dependency.  
 Action: Merge first. Trial merge clean vs main.
 
-**#47** · Dirty ⚠️  
+**#47** · Dirty 
 Impact: Context injection; depends on #45's schema.  
 Action: After #45 → rebase onto `origin/main` → `--force-with-lease` → re-verify.
-
-Status: **Safe ✅** applies clean to current `main`; **Dirty ⚠️** conflicts; **Blocked ⛔** waits on another PR or red CI. Verify each with `git merge --no-commit --no-ff origin/<branch>` on a fresh `origin/main` checkout, then `git merge --abort`, and say so. Fix Dirty with a local rebase, not GitHub "Update branch"; on a branch someone else pushes to, merge `main` in instead. When a parent squash-merges, rebase a child with `git rebase --onto origin/main <old-parent-tip>`. A clean merge can still break: when two PRs touch one file or a `DOCS_BUDGET` cap, build and lint the merged tree. Merge a PR only when its checks are green on that head; wait for green `main` CI, then re-check the rest.
 
 ## ELI5: Merge Order
 Merge the foundation first. If a later PR was written against an older base, rebase it onto the new one so it drops in clean instead of creating a merge commit. We already tested the fit with a trial merge.
