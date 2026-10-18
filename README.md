@@ -9,6 +9,27 @@ These are compatibility targets; native acceptance on each OS is still required.
 
 ---
 
+## Video demos
+
+Select a preview to open its MP4 recording.
+
+[![Collection health dashboard with synthetic endpoints](screenshots/wyndoze-shield-preview.png)](screenshots/demo/wyndoze-shield-30s.mp4)
+
+**[Dashboard walkthrough — 30 seconds](screenshots/demo/wyndoze-shield-30s.mp4).**
+Shows collection health and triage with synthetic endpoint data.
+
+[![Desktop launcher starting a synthetic local scan](screenshots/wyndoze-shield-desktop-preview.png)](screenshots/demo/wyndoze-shield-desktop-29s.mp4)
+
+**[Desktop launch, scan, and dashboard — 29 seconds](screenshots/demo/wyndoze-shield-desktop-29s.mp4).**
+Shows the native Tk launcher on macOS, a synthetic scan starting, and opening the
+local web dashboard. The desktop launcher is maintained on
+[`grok/desktop-launcher`](https://github.com/cgfixit/WynDoze-Shield/tree/grok/desktop-launcher).
+The recording predates the copyable password field; its displayed session
+password belongs to a terminated demo session. These previews are demonstrations,
+not native Windows acceptance evidence.
+
+---
+
 ## What it does
 
 - **Agents** run on each endpoint (backup server, proxy, repository, DC,
