@@ -3,8 +3,7 @@
 A self-hosted agent and dashboard for endpoint inventory. Lightweight agents
 collect local telemetry. A loopback server classifies it with MITRE ATT&CK
 rules. An analyst works the findings through a triage inbox.
-
-Built and maintained by **CGFixIT**. Designed for **Windows 10, Windows 11,
+ Designed for **Windows 10, Windows 11,
 and Windows Server 2016, 2019, 2022, and 2025**, with **Python 3.12+**.
 These are compatibility targets; native acceptance on each OS is still required.
 
