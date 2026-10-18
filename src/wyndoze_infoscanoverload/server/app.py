@@ -144,9 +144,11 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - cohesive route table
         authorization: Annotated[str | None, Header()] = None,
     ) -> dict[str, object]:
         _require_ingest_token(app, authorization)
-        body = await request.body()
-        if len(body) > _MAX_INGEST_BYTES:
-            raise HTTPException(status_code=413, detail="ingest body exceeds 8 MiB")
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > _MAX_INGEST_BYTES:
+                raise HTTPException(status_code=413, detail="ingest body exceeds 8 MiB")
+            body.extend(chunk)
         try:
             report = ScanReport.model_validate_json(body)
         except ValidationError as exc:

@@ -44,7 +44,7 @@ Built and maintained by **CGFixIT**. Targets **Python 3.12 / 3.13**.
 | Command execution | `subprocess` list-args only, never `shell=True`. Hard timeouts. |
 | Rule packs | Pure data via `yaml.safe_load`. Unknown severity fails the pack load. |
 | Transport | HTTPS, or HTTP only to `127.0.0.1` or `::1`. `httpx` ignores proxy env. |
-| Ingest size | Bodies larger than 8 MiB are rejected with 413 before SQLite writes. |
+| Ingest size | After authentication, streamed bodies are counted before retention. Crossing 8 MiB returns 413 without reading the remaining body or writing SQLite. |
 | Process command lines | Not collected. The `cmdline` field stays null. |
 
 If `RECON_INGEST_TOKEN` or `RECON_DASHBOARD_PASSWORD` is unset or empty, that
