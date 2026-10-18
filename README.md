@@ -49,7 +49,7 @@ Full exports are rendered in memory, so their memory use grows with the result s
 | Command execution | `subprocess` list-args only, never `shell=True`. Hard timeouts. |
 | Rule packs | Pure data via `yaml.safe_load`. Unknown severity fails the pack load. |
 | Transport | HTTPS, or HTTP only to `127.0.0.1` or `::1`. `httpx` ignores proxy env. |
-| Ingest size | Bodies larger than 8 MiB are rejected with 413 before SQLite writes. |
+| Ingest size | Authenticate first, then reject at the first streamed chunk crossing 8 MiB, before parsing or SQLite writes. |
 | Process command lines | Off by default. Opt-in lines require a key and are sealed before storage/upload; patterns inspect at most 800 characters, and encrypted text is limited to 3000 UTF-8 bytes on a character boundary. |
 
 If `RECON_INGEST_TOKEN` or `RECON_DASHBOARD_PASSWORD` is unset or empty, that

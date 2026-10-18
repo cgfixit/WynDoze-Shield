@@ -75,6 +75,13 @@ $env:RECON_AGENT_DISABLE = "1"
 .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe scan --no-upload --output-json .\report.json --role workstation
 ```
 
+## Ingest limits
+
+The server authenticates before reading a report and returns 413 as soon as
+received body bytes exceed 8 MiB. Rejected reports are not evaluated or stored.
+This bounds accumulated application body bytes; transport buffers, the current
+ASGI chunk, concurrent requests, and valid JSON parsing also consume memory.
+
 ## Work the inbox
 
 The installed v1.2 rule pack matches the source copy and contains 28 rules.
