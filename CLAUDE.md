@@ -19,14 +19,17 @@ Use the project venv at `.venv/` (Python 3.12). On Windows call `.venv\Scripts\p
 ```bash
 python -m pip install -e ".[server,dev]"   # pyproject.toml is the source of truth; requirements/constraints are floors, not a lock
 
-pytest -q                                   # full suite (unit + integration, ~150 tests)
+pytest -q                                   # full suite (unit + integration, ~190 tests)
 pytest tests/unit/test_rules.py -q          # one file
 pytest tests/integration/test_server.py -q -k suppress   # one test by keyword
 
 ruff check src tests                        # select = ALL, line-length 100; CI-equivalent lint
 ruff format --check src tests
-mypy src                                    # strict, pydantic plugin
+mypy src && mypy --platform win32 src       # strict, pydantic plugin; CI checks both platforms
+python3 .claude/skills/invariant-guard/check_invariants.py   # stdlib-only design-invariant gate
 ```
+
+In a Linux cloud container the system Python may lack `tkinter`, and `tests/unit/test_desktop.py` then fails to collect. Build the venv on a managed interpreter: `uv venv --python 3.12 --managed-python .venv && uv pip install --python .venv/bin/python -e ".[server,dev]"`.
 
 Run the server locally (both secrets are required or every route returns 401):
 
@@ -41,6 +44,8 @@ WynDoze-InfoScanOverload-agent scan --server-url http://127.0.0.1:8000/api/scans
 Agent subcommands: `scan`, `bundle`, `replay`, `evaluate-local`, `gen-key`, `version`. `scan --no-upload --output-json report.json` then `evaluate-local report.json` scores without a server. Delete that JSON afterwards; it is host inventory.
 
 Test notes: `asyncio_mode = auto`, `--strict-markers`. The `integration` marker is declared in `pyproject.toml` but no test currently carries it; integration tests are selected by path (`tests/integration/`). Fixtures `backup_server_report`, `clean_report`, and `tmp_db` live in `tests/conftest.py`. Server tests build the app with `create_app(ServerConfig(...))` and `TestClient`; they never touch the ProgramData database.
+
+CI runs on Ubuntu and Windows, so Windows-only stdlib must work on both legs. The `"oem"` codec and `os.startfile` exist only on Windows: tests use `cp437` as the OEM stand-in off Windows, and code probes `getattr(os, "startfile", None)`. Neither an `os.name` guard (mypy does not narrow it) nor a `sys.platform` guard (trips `warn_unreachable` on the other platform) type-checks on both.
 
 ## Architecture
 
@@ -95,7 +100,7 @@ Builds argv lists for `subprocess` (`scan_argv`, `schtasks_create_argv`, `schtas
 
 ## Constraints to preserve
 
-These come from `.agents/skills/wyndozescan-optimizer/SKILL.md` and the design above. They are invariants, not preferences.
+These come from `.agents/skills/wyndozescan-optimizer/SKILL.md` and the design above. They are invariants, not preferences. `.claude/skills/invariant-guard/check_invariants.py` checks most of them statically (CI job `invariants`). If a user-approved change moves a pinned value, update the checker in the same commit and run its `verify.sh`.
 
 - Loopback only: no listener and no `http` upload to any host other than `127.0.0.1` or `::1`.
 - No telemetry export, no OpenAPI/docs routes, no dependency that sends data off the machine.
@@ -110,5 +115,12 @@ These come from `.agents/skills/wyndozescan-optimizer/SKILL.md` and the design a
 - Version is `__version__` in `src/wyndoze_infoscanoverload/_version.py` (hatch dynamic version).
 - Pydantic v2 everywhere; nested telemetry models use `extra="ignore"` so a newer agent does not hard-fail an older server. Envelope fields on `ScanReport` stay strict.
 - Imports used only in annotations stay out of `TYPE_CHECKING` blocks in model and route code (ruff `TC00x` are ignored for this reason).
-- CI is `.github/workflows/ci.yml`: a lint job (`ruff check`, `ruff format --check`, `mypy src`) on Ubuntu and a pytest job on Ubuntu and Windows with `--cov-fail-under=80`. No PR template exists. Work on a prefixed branch (`grok/`, `claude/`, `codex/`, `kimi/`), never commit to `main`, open PRs as draft, one concern per PR. Before a PR run the same four commands locally and state what was not run.
-- Line endings are normalized by `.gitattributes` (LF in the repo, `.ps1` as CRLF). Do not commit `documentation.pdf`, database files, or anything under `*.old`; the launcher opens the PDF from the project folder when the operator drops one there.
+- CI is `.github/workflows/ci.yml`, with three parallel jobs. `invariants` runs the stdlib checker and its mutation self-test with no install. `lint` runs `ruff check`, `ruff format --check`, `mypy src`, and `mypy --platform win32 src` on Ubuntu. `test` runs pytest on Ubuntu and Windows with `--cov-fail-under=80`. Actions are SHA-pinned (Dependabot bumps them monthly), the Python version comes from `.python-version`, and the pip cache is keyed on `pyproject.toml`.
+- No PR template exists. Work on a prefixed branch (`grok/`, `claude/`, `codex/`, `kimi/`), never commit to `main`, open PRs as draft, one concern per PR. Title shape is `[prefix] - sentence`. Body headings are Summary, Test evidence (commands actually run), Merge order, and Base. Before a PR, run the CI commands above locally and state what was not run.
+- Check unmerged remote branches before starting (`git log origin/main..origin/<branch>`). Large work has sat on branches with no PR. Stack on such a branch rather than forking a parallel copy of a file it rewrote.
+- Line endings are normalized by `.gitattributes` (LF in the repo, `.ps1` as CRLF). Do not commit database files or anything under `*.old`. `documentation.pdf` is gitignored but force-tracked; leave it alone unless the task is the PDF. The launcher opens it from the project folder.
+
+## Skills
+
+- `.claude/skills/wyndoze-optimize/`: time-boxed scan of the tree, then focused draft PRs (`bootstrap.sh` seeds the scan). Invoke explicitly, because it opens PRs. `.agents/skills/wyndozescan-optimizer/` is the same workflow for non-Claude agents.
+- `.claude/skills/invariant-guard/`: `check_invariants.py` (exit 0 pass, 2 violated, 3 env error) plus `verify.sh`, which plants violations to prove the checker still fails.
