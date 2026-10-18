@@ -11,6 +11,12 @@ Reference for the working tree at version 1.0.0. Behavior below matches the code
 
 Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and `version`.
 
+The source and installed Windows pack are identical v1.2 with 28 rules.
+Windows admin display names retain a bounded `local_admin_sids` mapping;
+the admin policy recognizes account-domain RIDs 500/512, rather than trusting
+an arbitrary qualified account's basename. Windows service posture rules are
+platform-scoped and empty service inventories do not prove a missing service.
+
 ## Server routes
 
 | Route | Auth | Result |

@@ -151,8 +151,8 @@ All configuration is environment-driven (Pydantic Settings).
 
 ## Rules engine
 
-Rules are declarative YAML. The bundled pack (`windows-default`, v1.0) ships
-**17 rules** across **7 rule kinds**. Command lines stay empty unless
+Rules are declarative YAML. The source and bundled pack (`windows-default`, v1.2)
+ship the same **28 rules** across **7 rule kinds**. Command lines stay empty unless
 `--cmdline` is set, and then they are stored as Fernet tokens.
 
 Supported rule kinds:
@@ -167,7 +167,22 @@ Supported rule kinds:
 | `missing_expected_service` | An expected service is absent |
 
 Every rule may declare `roles:` (scope to endpoint roles) and `technique:`
-(a MITRE ATT&CK id). Example:
+(a MITRE ATT&CK id).
+
+Rules can also declare `platforms:`; the Windows service posture rules apply
+only to Windows and missing-service checks require a nonempty service inventory.
+Process/service presence is a review hint, not proof of malicious behavior.
+Recovery utilities and an idle Windows Update service are low-severity hints;
+short tunnel software names use whole-name matching to reduce incidental hits.
+
+Windows reports retain administrator display names and add a bounded
+`local_admin_sids` mapping. The bundled admin rule accepts account-domain RIDs
+500 (built-in Administrator, including renamed/localized accounts) and 512
+(Domain Admins), plus its explicit name allowlist. A qualified name alone is
+never stripped to a trusted basename. Older reports without SIDs still use
+explicit name matches; tune qualified allowlist entries for other approved accounts.
+
+Example:
 
 ```yaml
 name: windows-default

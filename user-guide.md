@@ -66,6 +66,17 @@ $env:RECON_AGENT_DISABLE = "1"
 
 ## Work the inbox
 
+The installed v1.2 rule pack matches the source copy and contains 28 rules.
+Treat tool and service presence as context for review, not a malware verdict.
+Windows-only missing-service hints require a nonempty service inventory.
+
+Local administrator names are accompanied by SIDs. Built-in Administrator
+(RID 500) and Domain Admins (RID 512) are recognized by account-domain SID,
+including renamed/localized principals. A different `DOMAIN\Administrator`
+is not trusted just because its last component matches. Older reports without
+SIDs need explicit qualified-name entries in a custom rule pack to allow such
+principals. Tune the supplied policy to your estate.
+
 Sign in, then open **Triage Inbox**. Flag, archive, suppress, or send a finding back to triage from that page. A browser on another origin receives 403. A request with no `Origin` header still works, which is how the local page posts.
 
 Exports are CSV, Markdown, JSON, and Sentinel NDJSON. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with a single quote.
