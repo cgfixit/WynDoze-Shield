@@ -28,7 +28,7 @@ td { overflow-wrap: anywhere; vertical-align: top; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #21262d; }
 th { color: #8b949e; font-weight: 600; text-transform: uppercase; font-size: 11px; }
 tr:hover { background: #161b22; }
-.badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+.badge { white-space: nowrap; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
 .critical { background: #da3633; color: #fff; }
 .high { background: #fb8500; color: #1a1a1a; }
 .medium { background: #d4a72c; color: #1a1a1a; }
@@ -40,6 +40,9 @@ tr:hover { background: #161b22; }
 .card .n { font-size: 28px; font-weight: 700; }
 .card .l { color: #8b949e; font-size: 12px; margin-top: 4px; }
 form.inline { display: inline; }
+code.status { white-space: nowrap; }
+table.findings td:nth-child(2) { min-width: 10ch; }
+table.findings td:nth-child(3) { min-width: 16ch; }
 button { background: #21262d; color: #e6edf3; border: 1px solid #30363d;
     border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
 button:hover { background: #30363d; }
@@ -135,7 +138,7 @@ def _finding_row(f: dict[str, Any], *, actions: bool = True) -> str:
         f"{escape(f.get('title', ''))}</a><br><span class='muted'>"
         f"{escape(f.get('message') or '')}</span></td>"
         f"<td>{technique}</td>"
-        f"<td><code>{escape(f.get('status', ''))}</code> "
+        f"<td><code class='status'>{escape(f.get('status', ''))}</code> "
         f"<span class='muted'>&times;{escape(str(f.get('seen_count', 1)))}</span></td>"
         f"<td>{escape(evidence)}</td>"
         f"{action_cell}"
@@ -201,7 +204,7 @@ def findings_table(
         action_th = "<th>Actions</th>" if actions else ""
         rows = "".join(_finding_row(f, actions=actions) for f in findings)
         body += (
-            "<table><thead><tr><th>Sev</th><th>Host</th><th>Finding</th><th>Technique</th>"
+            "<table class='findings'><thead><tr><th>Sev</th><th>Host</th><th>Finding</th><th>Technique</th>"
             f"<th>Status</th><th>Evidence</th>{action_th}</tr></thead><tbody>{rows}</tbody></table>"
         )
     else:
@@ -213,7 +216,7 @@ def finding_detail(finding: dict[str, Any], scan: dict[str, Any] | None) -> str:
     """Display complete escaped finding evidence, without decrypting command lines."""
     body = (
         f"<h2>{escape(finding.get('title', ''))}</h2>"
-        "<table><thead><tr><th>Sev</th><th>Host</th><th>Finding</th><th>Technique</th>"
+        "<table class='findings'><thead><tr><th>Sev</th><th>Host</th><th>Finding</th><th>Technique</th>"
         "<th>Status</th><th>Evidence preview</th><th>Actions</th></tr></thead><tbody>"
         + _finding_row(finding)
         + "</tbody></table>"
