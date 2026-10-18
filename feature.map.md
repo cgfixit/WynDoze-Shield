@@ -73,6 +73,15 @@ FastAPI telemetry flags are forced off inside `create_app`. `OTEL_SDK_DISABLED` 
 | Unknown model keys on platform, service, and software | Dropped |
 | Unknown rule severity | `RuleError` at pack load. Observations still coerce unknown values to `info` |
 
+## Collection health
+
+`collection_health` is optional on the wire (at most six collectors). New agents
+report ok/partial/unavailable/failed, item count, duration_ms, truncated and up to
+eight fixed issue categories. Legacy reports retain unknown coverage. Endpoints
+show collection and receipt times separately; age defaults to 36 hours via
+`RECON_STALE_AFTER_HOURS`. No finding is automatically resolved from missing data.
+Missing-service checks skip explicitly incomplete service inventories.
+
 ## Collectors
 
 Windows software comes from `reg.exe` with `/reg:64` and `/reg:32`, decoded as OEM text. Local administrators come from `Get-LocalGroupMember -SID S-1-5-32-544`. Service rows use the service name, display name, and status. Process command lines stay empty unless `--cmdline` or `RECON_AGENT_CMDLINE=1` is set. That mode requires `RECON_AGENT_ENCRYPTION_KEY`. The stored value is a Fernet token. Pattern names such as `encoded-powershell` are stored separately so the server can score them without the key.

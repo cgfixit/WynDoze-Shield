@@ -24,6 +24,7 @@ import sqlite3
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -265,11 +266,32 @@ class Storage:
             row = conn.execute("SELECT * FROM scans WHERE id = ?", (scan_id,)).fetchone()
         return _row_to_scan(dict(row)) if row else None
 
-    def list_endpoints(self) -> list[dict[str, Any]]:
-        """Return all known endpoints, most recently seen first."""
+    def list_endpoints(self, stale_after_hours: int = 36) -> list[dict[str, Any]]:
+        """Show collection age separately from upload receipt, including replayed reports."""
+        endpoints = []
         with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM endpoints ORDER BY last_seen_utc DESC").fetchall()
-        return [dict(r) for r in rows]
+            rows = conn.execute(
+                """SELECT e.*, s.scan_time_utc, s.raw_json FROM endpoints e
+                   LEFT JOIN scans s ON s.id=e.last_scan_id
+                   ORDER BY e.last_seen_utc DESC"""
+            )
+            for row in rows:
+                endpoint = dict(row)
+                report = json.loads(endpoint.pop("raw_json") or "{}")
+                endpoint["collection_health"] = report.get("collection_health", {})
+                endpoint["freshness"] = "unknown"
+                try:
+                    collected = datetime.fromisoformat(endpoint["scan_time_utc"])
+                    if collected.tzinfo is not None:
+                        age = (datetime.now(UTC) - collected).total_seconds()
+                        if age >= 0:
+                            endpoint["freshness"] = (
+                                "overdue" if age > stale_after_hours * 3600 else "current"
+                            )
+                except (TypeError, ValueError, AttributeError):
+                    endpoint["freshness"] = "unknown"
+                endpoints.append(endpoint)
+        return endpoints
 
     def list_findings(
         self, status: str | None = None, limit: int | None = 500
