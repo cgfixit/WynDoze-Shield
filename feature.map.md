@@ -24,6 +24,9 @@ Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and 
 
 Actions are `flag`, `archive`, `suppress`, and `triage`.
 
+Finding tables are limited to 500 rows. Authenticated CSV, Markdown, JSON, and
+Sentinel exports include all stored findings and are rendered in memory.
+
 ## Agent environment
 
 | Name | Effect |

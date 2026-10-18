@@ -23,6 +23,10 @@ Built and maintained by **CGFixIT**. Targets **Python 3.12 / 3.13**.
   are deduplicated per (host, rule, evidence) so recurring conditions bump a
   `seen_count` instead of spamming the inbox.
 
+Dashboard finding tables show at most 500 rows. CSV, Markdown, JSON, and Sentinel
+exports include every stored finding, including archived and suppressed rows.
+Full exports are rendered in memory, so their memory use grows with the result set.
+
 ### What it deliberately does **not** do
 
 - No file *contents* are ever read — only metadata (names, ports, service
