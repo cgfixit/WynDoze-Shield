@@ -30,6 +30,9 @@ platform-scoped and empty service inventories do not prove a missing service.
 
 Actions are `flag`, `archive`, `suppress`, and `triage`.
 
+Finding tables are limited to 500 rows. Authenticated CSV, Markdown, JSON, and
+Sentinel exports include all stored findings and are rendered in memory.
+
 ## Agent environment
 
 | Name | Effect |

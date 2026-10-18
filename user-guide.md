@@ -92,6 +92,10 @@ Sign in, then open **Triage Inbox**. Flag, archive, suppress, or send a finding 
 
 Exports are CSV, Markdown, JSON, and Sentinel NDJSON. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with a single quote.
 
+Finding tables show at most 500 rows; the page states that limit. All four export
+formats include the complete stored finding set, including archived and suppressed
+rows. Full exports are rendered in memory and can be large on a busy dashboard.
+
 ## Keep a bundle when upload fails
 
 `--defer` is the default on `scan`. The Fernet key must already be set, or the agent exits 2 before it calls the server and writes no bundle.

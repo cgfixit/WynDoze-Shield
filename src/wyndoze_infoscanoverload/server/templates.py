@@ -149,6 +149,7 @@ def findings_table(findings: list[dict[str, Any]], title: str, *, actions: bool 
     rows = "".join(_finding_row(f, actions=actions) for f in findings)
     body = (
         f"<h2>{escape(title)}</h2>"
+        "<p class='muted'>Showing up to 500 findings. Exports include all stored findings.</p>"
         "<p class='muted'>"
         "<a href='/export/findings.csv'>CSV</a> &middot; "
         "<a href='/export/findings.md'>Markdown</a> &middot; "
