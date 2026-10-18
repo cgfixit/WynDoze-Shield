@@ -24,6 +24,7 @@ nav a { color: #58a6ff; margin-right: 16px; text-decoration: none; font-size: 14
 nav a:hover { text-decoration: underline; }
 main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+td { overflow-wrap: anywhere; vertical-align: top; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #21262d; }
 th { color: #8b949e; font-weight: 600; text-transform: uppercase; font-size: 11px; }
 tr:hover { background: #161b22; }
@@ -42,7 +43,7 @@ form.inline { display: inline; }
 button { background: #21262d; color: #e6edf3; border: 1px solid #30363d;
     border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
 button:hover { background: #30363d; }
-code { background: #161b22; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+code { overflow-wrap: anywhere; background: #161b22; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 .muted { color: #8b949e; }
 """
 
