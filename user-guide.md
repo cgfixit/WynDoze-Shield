@@ -38,6 +38,11 @@ $env:RECON_DASHBOARD_PASSWORD = "devpassword"
 
 The process listens on `127.0.0.1:8000`. Open `http://127.0.0.1:8000/` and sign in as `admin` with the dashboard password. `GET /api/health` stays open and returns `{"status":"ok"}`.
 
+Ingest checks authentication before reading a report. It counts actual streamed
+bytes and stops at the first chunk crossing 8 MiB with HTTP 413, without writing
+scan data. The cap also applies when no `Content-Length` is supplied. The
+application's retained body is bounded; transport buffers are separate.
+
 `RECON_HOST` accepts only `127.0.0.1` and `::1`. Any other host exits 2.
 
 ## Scan an endpoint
