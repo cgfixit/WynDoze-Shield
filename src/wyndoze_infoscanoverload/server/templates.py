@@ -350,7 +350,7 @@ def _finding_navigation(
         if number < 1 or (label == "Next" and not has_next):
             continue
         links.append(f"<a href='{escape(_list_path(path, filters, number))}'>{label}</a>")
-    return f"<p>Page {page_number} &middot; " + " &middot; ".join(links) + "</p>"
+    return f"<p>Page {escape(str(page_number))} &middot; " + " &middot; ".join(links) + "</p>"
 
 
 def triage_page(

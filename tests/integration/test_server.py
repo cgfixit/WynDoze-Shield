@@ -111,7 +111,7 @@ def test_html_shell_headers(client: TestClient) -> None:
         page = client.get(path, auth=DASH_AUTH)
         assert page.status_code == 200
         assert "script-src 'none'" in page.headers["content-security-policy"]
-        assert page.headers["referrer-policy"] == "no-referrer"
+        assert page.headers["referrer-policy"] == "same-origin"
         assert page.headers["x-content-type-options"] == "nosniff"
         assert "Skip to content" in page.text
         assert "Local triage" in page.text

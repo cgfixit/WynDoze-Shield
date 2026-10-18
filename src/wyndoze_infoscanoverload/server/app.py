@@ -56,7 +56,8 @@ _HTML_HEADERS: dict[str, str] = {
         "img-src 'none'; script-src 'none'; "
         "form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
     ),
-    "Referrer-Policy": "no-referrer",
+    # Form POSTs need their same-origin Origin header for the CSRF check.
+    "Referrer-Policy": "same-origin",
     "X-Content-Type-Options": "nosniff",
 }
 

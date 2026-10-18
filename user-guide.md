@@ -144,7 +144,9 @@ principals. Tune the supplied policy to your estate.
 
 Sign in, then open **Triage Inbox**. Each finding is a decision card; low/info
 cards are grouped unless that severity is selected. Suppress has a confirmation
-page. Timeline also shows recent scans with redacted facts and counts. Flag, archive, suppress, or send a finding back to triage from that page. A browser on another origin receives 403. A request with no `Origin` header still works, which is how the local page posts.
+page. Timeline also shows recent scans with redacted facts and counts. Flag, archive, suppress, or send a finding back to triage from that page. A browser on another origin receives 403. The dashboard uses `Referrer-Policy:
+same-origin` so its own browser forms retain the origin needed by this check,
+while links to other sites receive no referrer. A request with no `Origin` header still works, which is how the local page posts.
 
 Exports are CSV, Markdown, JSON, and Sentinel NDJSON. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with a single quote.
 

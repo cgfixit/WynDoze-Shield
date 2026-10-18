@@ -56,7 +56,9 @@ def test_retries_transient_then_succeeds(
         [
             httpx.ConnectError("refused"),
             _Resp(503, "busy"),
-            _Resp(201, payload={"status": "accepted", "scan_id": 7}),
+            _Resp(
+                201, payload={"status": "accepted", "scan_id": 7, "hostname": clean_report.hostname}
+            ),
         ],
     )
     result = upload_report(clean_report, URL, "tok")
@@ -67,7 +69,14 @@ def test_retries_transient_then_succeeds(
 def test_sends_bearer_and_versioned_user_agent(
     monkeypatch: pytest.MonkeyPatch, clean_report: ScanReport
 ) -> None:
-    calls = _install(monkeypatch, [_Resp(201, payload={"status": "accepted"})])
+    calls = _install(
+        monkeypatch,
+        [
+            _Resp(
+                201, payload={"status": "accepted", "scan_id": 1, "hostname": clean_report.hostname}
+            )
+        ],
+    )
     upload_report(clean_report, URL, "tok", timeout_s=7, verify_tls=False)
     headers = calls[0]["headers"]
     assert headers["Authorization"] == "Bearer tok"
@@ -104,10 +113,10 @@ def test_rejects_bad_url_before_any_request(
     assert calls == []
 
 
-def test_non_json_and_non_object_bodies_are_wrapped(
-    monkeypatch: pytest.MonkeyPatch, clean_report: ScanReport
-) -> None:
-    _install(monkeypatch, [_Resp(200, text="plain ok")])
-    assert upload_report(clean_report, URL, "tok") == {"status": "ok", "raw": "plain ok"}
-    _install(monkeypatch, [_Resp(200, payload=[1, 2])])
-    assert upload_report(clean_report, URL, "tok") == {"status": "ok", "data": [1, 2]}
+@pytest.mark.parametrize("code", [200, 201])
+@pytest.mark.parametrize("payload", [None, [1, 2], {"status": "accepted"}])
+def test_malformed_acknowledgements_are_rejected(monkeypatch, clean_report, code, payload):
+    calls = _install(monkeypatch, [_Resp(code, text="plain ok", payload=payload)])
+    with pytest.raises(UploadError):
+        upload_report(clean_report, URL, "tok")
+    assert len(calls) == 1
