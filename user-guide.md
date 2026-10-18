@@ -38,11 +38,6 @@ $env:RECON_DASHBOARD_PASSWORD = "devpassword"
 
 The process listens on `127.0.0.1:8000`. Open `http://127.0.0.1:8000/` and sign in as `admin` with the dashboard password. `GET /api/health` stays open and returns `{"status":"ok"}`.
 
-Ingest checks authentication before reading a report. It counts actual streamed
-bytes and stops at the first chunk crossing 8 MiB with HTTP 413, without writing
-scan data. The cap also applies when no `Content-Length` is supplied. The
-application's retained body is bounded; transport buffers are separate.
-
 `RECON_HOST` accepts only `127.0.0.1` and `::1`. Any other host exits 2.
 
 ## Scan an endpoint
@@ -93,6 +88,13 @@ Set the kill switch before you start the agent. The process exits 0 and writes n
 $env:RECON_AGENT_DISABLE = "1"
 .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe scan --no-upload --output-json .\report.json --role workstation
 ```
+
+## Ingest limits
+
+The server authenticates before reading a report and returns 413 as soon as
+received body bytes exceed 8 MiB. Rejected reports are not evaluated or stored.
+This bounds accumulated application body bytes; transport buffers, the current
+ASGI chunk, concurrent requests, and valid JSON parsing also consume memory.
 
 ## Work the inbox
 

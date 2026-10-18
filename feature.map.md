@@ -64,7 +64,7 @@ FastAPI telemetry flags are forced off inside `create_app`. `OTEL_SDK_DISABLED` 
 
 | Item | Limit |
 |---|---|
-| Ingest body | Authentication before reading; cumulative streamed bytes checked before retention. Crossing 8 MiB returns 413 without consuming the rest or writing scan data |
+| Ingest body | Authenticate first; count streamed bytes before retaining them; 413 at the first chunk crossing 8 MiB |
 | `scan_time_utc` | 64 characters |
 | Short strings such as `exe` and `display_name` | 512 characters, clipped before the model is built |
 | Process list | 5000 on the model. The agent default `process_limit` is 1000 |
