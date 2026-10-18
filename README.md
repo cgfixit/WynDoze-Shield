@@ -1,4 +1,4 @@
-# WynDoze-InfoScanOverload
+# WynDoze-Shield
 
 A self-hosted agent and dashboard for endpoint inventory. Lightweight agents
 collect local telemetry. A loopback server classifies it with MITRE ATT&CK
