@@ -24,6 +24,10 @@ You should see `WynDoze-InfoScanOverload-agent.exe` and `WynDoze-InfoScanOverloa
 
 ## Start the dashboard
 
+The server requires FastAPI 0.143.0+. A missing database parent is created with
+access for its owner, SYSTEM, and Administrators. Existing directory permissions
+are preserved. ACL setup failures prevent database creation.
+
 Set both secrets. An unset or empty value returns 401.
 
 ```powershell
