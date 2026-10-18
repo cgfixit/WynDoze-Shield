@@ -142,7 +142,7 @@ All configuration is environment-driven (Pydantic Settings).
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `RECON_DB_PATH` | `WynDoze-InfoScanOverload.sqlite3` | SQLite database path |
+| `RECON_DB_PATH` | `%ProgramData%\WynDoze-InfoScanOverload\WynDoze-InfoScanOverload.sqlite3` on Windows; `WynDoze-InfoScanOverload.sqlite3` elsewhere | SQLite database path |
 | `RECON_INGEST_TOKEN` | *(unset)* | Required bearer token for `/api/scans` |
 | `RECON_DASHBOARD_USER` | `admin` | Basic-auth username |
 | `RECON_DASHBOARD_PASSWORD` | *(unset)* | Required basic-auth password. Unset returns 401. |
