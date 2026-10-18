@@ -78,6 +78,7 @@ $env:RECON_AGENT_DISABLE = "1"
 ## Work the inbox
 
 The installed v1.2 rule pack matches the source copy and contains 28 rules.
+Both files must be updated together; a regression check rejects policy drift.
 Treat tool and service presence as context for review, not a malware verdict.
 Windows-only missing-service hints require a nonempty service inventory.
 
