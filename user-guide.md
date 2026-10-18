@@ -32,6 +32,12 @@ The process listens on `127.0.0.1:8000`. Open `http://127.0.0.1:8000/` and sign 
 
 `RECON_HOST` accepts only `127.0.0.1` and `::1`. Any other host exits 2.
 
+The server needs FastAPI 0.143.0 or newer. It creates a missing database directory
+with access for the owner, SYSTEM, and Administrators before opening SQLite.
+Existing directory ACLs remain unchanged. If your account cannot create the
+ProgramData path, set `RECON_DB_PATH` to a writable, protected location. An ACL
+failure stops startup without creating the database.
+
 ## Scan an endpoint
 
 In a second shell, with the venv active:

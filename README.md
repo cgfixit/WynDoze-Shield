@@ -74,6 +74,8 @@ python -m pip install -e ".[server,dev]"
 ```
 
 `requirements.txt` and `constraints.txt` repeat those floors. They are not a lock.
+The server requires FastAPI 0.143.0 or newer, including its telemetry configuration
+API; telemetry export remains explicitly disabled.
 
 Two console scripts are installed:
 
@@ -146,6 +148,13 @@ All configuration is environment-driven (Pydantic Settings).
 | `RECON_DASHBOARD_PASSWORD` | *(unset)* | Required basic-auth password. Unset returns 401. |
 | `RECON_RULES_PATH` | *(bundled)* | Override rule pack YAML |
 | `RECON_HOST` / `RECON_PORT` | `127.0.0.1` / `8000` | Bind address. Only `127.0.0.1` and `::1` are accepted. |
+
+Startup creates a missing database parent directory before opening SQLite.
+New directories are private: owner/SYSTEM/Administrators on Windows and mode
+0700 on POSIX. Existing directory permissions remain operator-managed. Choose
+a writable `RECON_DB_PATH` if the service account cannot create the default
+ProgramData directory. Startup stops before creating a database if the new
+Windows directory cannot be protected.
 
 ---
 
