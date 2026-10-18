@@ -164,8 +164,45 @@ def findings_table(findings: list[dict[str, Any]], title: str, *, actions: bool 
     return page(f"WynDoze-InfoScanOverload {title}", body)
 
 
+def _coverage_html(health: dict[str, Any]) -> str:
+    if not health:
+        return "Unknown (older agent)"
+    parts = []
+    names = (
+        "ip_addresses",
+        "processes",
+        "listening_connections",
+        "services",
+        "installed_software",
+        "local_admins",
+    )
+    for name in names:
+        result = health.get(name)
+        if not isinstance(result, dict):
+            parts.append(f"{name}: unknown")
+            continue
+        issues = ", ".join(str(issue) for issue in result.get("issues", []))
+        parts.append(
+            f"{name}: {result.get('status', 'unknown')} "
+            f"({result.get('item_count', 0)} items, {result.get('duration_ms', 0)} ms)"
+            + (f"; {issues}" if issues else "")
+        )
+    incomplete = any(
+        isinstance(result, dict) and (result.get("status") != "ok" or result.get("truncated"))
+        for result in health.values()
+    )
+    label = "Incomplete collection" if incomplete else "Collection reported complete"
+    if not incomplete and len(health) != len(names):
+        label = "Unknown coverage"
+    return (
+        f"<details><summary>{label}</summary><ul>"
+        + "".join(f"<li>{escape(part)}</li>" for part in parts)
+        + "</ul></details>"
+    )
+
+
 def endpoints_table(endpoints: list[dict[str, Any]]) -> str:
-    """Render the endpoints registry page."""
+    """Render endpoint collection coverage and age, independently of upload time."""
     if not endpoints:
         return page(
             "WynDoze-InfoScanOverload Endpoints", "<h2>Endpoints</h2><p class='muted'>None yet.</p>"
@@ -176,14 +213,20 @@ def endpoints_table(endpoints: list[dict[str, Any]]) -> str:
         f"<td>{escape(e.get('fqdn') or '')}</td>"
         f"<td><code>{escape(e.get('role', 'unknown'))}</code></td>"
         f"<td>{escape(e.get('first_seen_utc', ''))}</td>"
+        f"<td>{escape(e.get('scan_time_utc') or 'Unknown')}</td>"
         f"<td>{escape(e.get('last_seen_utc', ''))}</td>"
+        f"<td>{escape(e.get('freshness', 'unknown'))}</td>"
+        f"<td>{_coverage_html(e.get('collection_health', {}))}</td>"
         "</tr>"
         for e in endpoints
     )
     body = (
-        "<h2>Endpoints</h2><table><thead><tr>"
+        "<h2>Endpoints</h2>"
+        "<p>Coverage describes reported collection, not a security verdict. "
+        "Replaying an old bundle updates receipt time without refreshing its inventory age.</p>"
+        "<table><thead><tr>"
         "<th>Hostname</th><th>FQDN</th><th>Role</th>"
-        "<th>First Seen</th><th>Last Seen</th>"
+        "<th>First received</th><th>Collected</th><th>Received</th><th>Freshness</th><th>Collection coverage</th>"
         "</tr></thead><tbody>"
         f"{rows}</tbody></table>"
     )

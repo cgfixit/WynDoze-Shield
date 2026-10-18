@@ -96,6 +96,17 @@ Finding tables show at most 500 rows; the page states that limit. All four expor
 formats include the complete stored finding set, including archived and suppressed
 rows. Full exports are rendered in memory and can be large on a busy dashboard.
 
+## Check collection health
+
+Open **Endpoints** to compare **Collected** with **Received**. An upload can
+succeed while a collector is partial, unavailable, or failed. Coverage reports
+counts, milliseconds, truncation and bounded issue categories, never command
+text or stderr. Older agents show unknown coverage. No findings does not mean
+a complete or clean scan. Reports older than `RECON_STALE_AFTER_HOURS` (36 by
+default) are overdue; future or timezone-less timestamps have unknown age.
+An air-gapped replay changes receipt time, not collection time. Missing-service
+rules are skipped when reported service coverage is incomplete.
+
 ## Keep a bundle when upload fails
 
 `--defer` is the default on `scan`. The Fernet key must already be set, or the agent exits 2 before it calls the server and writes no bundle.

@@ -183,7 +183,9 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901 - cohesive route table
 
     @app.get("/endpoints", response_class=HTMLResponse)
     def endpoints(_: None = DashAuth) -> str:
-        return templates.endpoints_table(app.state.storage.list_endpoints())
+        return templates.endpoints_table(
+            app.state.storage.list_endpoints(app.state.config.stale_after_hours)
+        )
 
     # -- findings lifecycle ------------------------------------------------
     @app.post("/findings/{finding_id}/{action}", response_class=HTMLResponse)

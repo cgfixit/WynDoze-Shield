@@ -142,6 +142,17 @@ WynDoze-InfoScanOverload-agent evaluate-local report.json          # prints find
 
 All configuration is environment-driven (Pydantic Settings).
 
+### Collection health and freshness
+
+New reports include bounded status, item count, duration, truncation, and safe
+issue categories for each collector. The Endpoints page shows this coverage
+separately from collection age and receipt time. Older reports show unknown
+coverage. Replaying an old bundle does not make its inventory current.
+`RECON_STALE_AFTER_HOURS` defaults to 36 (1–8760); future or timezone-less scan
+timestamps show unknown freshness. Reaching a collection cap conservatively
+marks coverage partial. Missing-service rules do not infer absence from partial
+or failed service collection; positive observations still remain reviewable.
+
 ### Agent (`RECON_AGENT_*`)
 
 | Variable | Purpose |
