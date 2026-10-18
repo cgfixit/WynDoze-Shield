@@ -42,6 +42,7 @@ In a second shell, with the venv active:
 
 ```powershell
 $env:RECON_AGENT_TOKEN = "devtoken"
+$env:RECON_AGENT_ENCRYPTION_KEY = .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe gen-key
 .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe scan --server-url http://127.0.0.1:8000/api/scans --role workstation
 ```
 
@@ -85,6 +86,13 @@ $env:RECON_AGENT_ENCRYPTION_KEY = .\.venv\Scripts\WynDoze-InfoScanOverload-agent
 Store that key outside the repo. On Windows the default cache directory is `%ProgramData%\WynDoze-InfoScanOverload\cache`. The dashboard database defaults to `%ProgramData%\WynDoze-InfoScanOverload\WynDoze-InfoScanOverload.sqlite3`. Encrypted bundles drop inherited Users access and grant SYSTEM, Administrators, and the current user.
 
 For a machine with no route to the server, use `bundle`, move the `.WynDoze-InfoScanOverload-bundle` file, then `replay` with the same key and `RECON_AGENT_TOKEN`.
+
+Replay requires a matching HTTP 201 ingest acknowledgement before deleting a
+bundle. A redirect or invalid acknowledgement leaves it on disk. Corrupt or
+unreadable files stay in the cache and are reported without preventing later
+valid bundles from uploading; replay exits 1 if any file fails. Use `--keep` to
+retain successful uploads. Every save gets an exclusive filename, including
+multiple scans from the same host within one second.
 
 ## Schedule a daily scan
 
