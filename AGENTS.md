@@ -28,10 +28,9 @@
   `WynDoze-InfoScanOverload` name; preserve `RECON_*` environment variables
   and `ReconAgentDailyScan` unless a migration is explicitly requested.
 - For rule changes, inspect both `rules/windows_default.yaml` and the
-  packaged `core/rulepacks/windows_default.yaml`. They currently differ:
-  the source copy is v1.1 and the default loaded from the package is v1.0.
-  Review that difference before reconciling it; subsequent rule edits must
-  update both copies together or explicitly document the intended split.
+  packaged `core/rulepacks/windows_default.yaml`. Keep both copies in the
+  same commit and verify the installed wheel loads the intended pack. If
+  they differ, establish the intended behavior before reconciling detections.
 - For optimizer work, read `.agents/skills/wyndozescan-optimizer/SKILL.md`.
   Recheck its historical repository and tool claims against the current tree.
 
