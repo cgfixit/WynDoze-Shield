@@ -3,7 +3,7 @@ Description=Run the WynDoze-InfoScanOverload endpoint scan daily
 Documentation=file:/opt/recon/README.md
 
 [Timer]
-# Daily at 02:30 local time, matching the official product's daily-scan model.
+# Collect daily at 02:30 local time.
 OnCalendar=*-*-* 02:30:00
 # If the machine was off at the scheduled time, run at next boot.
 Persistent=true

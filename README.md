@@ -1,8 +1,8 @@
 # WynDoze-Shield
 
 A self-hosted agent and dashboard for endpoint inventory. Lightweight agents
-collect local telemetry. A loopback server classifies it with MITRE ATT&CK
-rules. An analyst works the findings through a triage inbox.
+collect local telemetry. A loopback server evaluates project-authored heuristics
+mapped to MITRE ATT&CK® techniques. An analyst reviews the findings in a triage inbox.
  Designed for **Windows 10, Windows 11,
 and Windows Server 2016, 2019, 2022, and 2025**, with **Python 3.12+**.
 These are compatibility targets; native acceptance on each OS is still required.
@@ -32,7 +32,8 @@ Full exports are rendered in memory, so their memory use grows with the result s
 
 - No file *contents* are ever read — only metadata (names, ports, service
   states, package names, admin account names).
-- No credentials, tokens, or secrets are collected.
+- No credential-store collection. Opt-in command lines can contain secrets;
+  retained lines are encrypted, not redacted.
 - No active network scanning — only local listening-socket state.
 - No outbound cloud calls except the single HTTPS upload to *your* server.
 
@@ -56,6 +57,17 @@ If `RECON_INGEST_TOKEN` or `RECON_DASHBOARD_PASSWORD` is unset or empty, that
 endpoint returns 401. The server logs a warning at startup. There is no
 unauthenticated dev mode. Set `RECON_AGENT_DISABLE=1` to exit the agent before
 collection or upload. `RECON_HOST` accepts only `127.0.0.1` and `::1`.
+
+Use the scanner only on systems you own or are authorized to assess. Inventory
+can identify people and machines through usernames, hostnames, addresses, and
+executable paths. Command lines are off by default; enabling them can capture
+embedded credentials in the encrypted text, which anyone holding the key can
+recover. Encryption is not anonymization or redaction.
+
+The SQLite database and plain JSON/CSV/Markdown exports are not encrypted by
+the application. Restrict access to them, use appropriate disk protection, and
+set your own retention/deletion policy. Do not attach real inventory, keys, or
+credentials to public issues. See [SECURITY.md](SECURITY.md) for private reporting.
 
 ---
 
@@ -170,7 +182,7 @@ All configuration is environment-driven (Pydantic Settings).
 ## Rules engine
 
 Rules are declarative YAML. The source and bundled pack (`windows-default`, v1.2)
-ship the same **28 rules** across **7 rule kinds**. Command lines stay empty unless
+ship the same **28 rules** (CI checks the two copies byte-for-byte) across **7 rule kinds**. Command lines stay empty unless
 `--cmdline` is set, and then they are stored as Fernet tokens.
 
 Supported rule kinds:
@@ -265,5 +277,12 @@ src/wyndoze_infoscanoverload/
 
 ## License / status
 
-Internal tool, provided as-is with no warranty. MITRE ATT&CK is a registered
-trademark of The MITRE Corporation.
+The project's code is available under the [MIT license](LICENSE), without
+warranty. The static ATT&CK catalog includes third-party material covered by
+[MITRE's notice and license](NOTICE.md), which also ships in built packages.
+Dependencies retain their own licenses.
+
+MITRE ATT&CK® and ATT&CK® are registered trademarks of The MITRE Corporation.
+This independently maintained project is not affiliated with or endorsed by
+MITRE or any security/backup vendor. Its heuristic findings are leads for human
+review, not MITRE-certified detections or proof of compromise.

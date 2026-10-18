@@ -1,5 +1,5 @@
 # WynDoze-InfoScanOverload default rule pack.
-# Enhanced v1.1. Heuristics mapped to MITRE ATT&CK; tuned against the engine
+# Reviewed v1.2. Heuristics mapped to MITRE ATT&CK; tuned against the engine
 # in core/rules.py (exact process-name match, service/software substring match).
 #
 # Each rule is pure data. Supported kinds: listening_port, process_name,
@@ -7,6 +7,8 @@
 # missing_expected_service, cmdline_flag. Optional `roles` scopes a rule;
 # `technique` maps to MITRE ATT&CK.
 #
+# v1.2 also adds platform scoping, canonical administrator RIDs, and advisory
+# calibration for ordinary recovery/update tools and short tunnel names.
 # Change log from v1.0:
 #   - Added SMB/NetBIOS/SMB-over-IP and MSSQL listener checks (lateral movement).
 #   - Added shadow-copy deletion and event-log clearing process checks (T1490/T1070).
@@ -18,7 +20,7 @@
 #     fire on a .dmp file; dump artifacts are covered by cmdline `credential-hive`.
 
 name: windows-default
-version: "1.1"
+version: "1.2"
 
 rules:
   # --- Exposed remote-access / lateral-movement surface ----------------------
@@ -153,11 +155,11 @@ rules:
       - wmiexec.exe
 
   - id: proc-defense-evasion
-    title: Defense-evasion utility observed
+    title: Recovery or event-log administration utility observed
     kind: process_name
-    severity: high
+    severity: low
     category: defense_evasion
-    message: A utility associated with log clearing, backup destruction, or tampering is running.
+    message: An administration utility is running. Its process name alone does not establish log clearing, recovery inhibition, or tampering; confirm its use.
     technique: T1070
     names:
       - wevtutil.exe
@@ -226,11 +228,10 @@ rules:
     technique: T1572
     substrings:
       - ngrok
-      - frp
-      - chisel
       - cloudflared
       - localtonet
       - pagekite
+    names: [frp, chisel]
 
   - id: sw-pup-adware
     title: Adware or risky bundled software is installed
@@ -300,6 +301,7 @@ rules:
       - tlntsvr
 
   - id: svc-defender-or-mde-stopped
+    platforms: [windows]
     title: Endpoint protection service is not running
     kind: service_present
     severity: high
@@ -312,16 +314,18 @@ rules:
       - sense
 
   - id: svc-windows-update-stopped
+    platforms: [windows]
     title: Windows Update service is not running
     kind: service_present
-    severity: medium
+    severity: low
     category: posture
-    message: The Windows Update (wuauserv) service exists but is stopped. The host may be missing security patches.
+    message: Windows Update is stopped. Trigger-start services may normally be idle; verify update policy and patch status before treating this as a problem.
     states: [stopped]
     substrings:
       - wuauserv
 
   - id: svc-spooler-on-server
+    platforms: [windows]
     title: Print Spooler running on a server
     kind: service_present
     severity: high
@@ -356,6 +360,7 @@ rules:
 
   # --- Posture: expected services missing ---------------------------------------
   - id: svc-defender-missing
+    platforms: [windows]
     title: Windows Defender service not present
     kind: missing_expected_service
     severity: medium
@@ -366,6 +371,7 @@ rules:
       - windefend
 
   - id: svc-eventlog-missing
+    platforms: [windows]
     title: Windows Event Log service not present
     kind: missing_expected_service
     severity: high
@@ -376,6 +382,7 @@ rules:
       - eventlog
 
   - id: svc-vss-missing-on-backup
+    platforms: [windows]
     title: VSS not present on a backup server
     kind: missing_expected_service
     severity: medium
@@ -394,6 +401,7 @@ rules:
     category: accounts
     message: A local administrator account is present that is not on the approved allow-list.
     technique: T1078
+    allow_account_rids: [500, 512]
     allow:
       - administrator
       - domain admins
