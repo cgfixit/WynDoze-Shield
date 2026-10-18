@@ -125,3 +125,7 @@ delay. Native `-File` arguments use double quotes, while values inside the
 UTF-8 wrapper use PowerShell quoting. The wrapper returns the agent exit code,
 and installation stops if a task-state ACL cannot be applied. The task is
 allowed to start on battery.
+
+The synthetic installer check resets its exit status only after all assertions
+pass, including the expected child exit and ACL failure probes. A failed assertion
+still fails the PowerShell workflow. It does not register a real task or change ACLs.
