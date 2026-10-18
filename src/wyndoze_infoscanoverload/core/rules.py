@@ -256,7 +256,7 @@ def _eval_service_present(rule: Rule, report: ScanReport) -> list[str]:
 
 
 def _software_exact(hay: str, names: tuple[str, ...]) -> bool:
-    """Match a whole name or a name plus a version. Do not match a short word inside another word."""
+    """Match a whole name or a name plus a version, rather than a word within another word."""
     if not names:
         return False
     compact = " ".join(re.findall(r"[a-z0-9]+", hay))

@@ -111,34 +111,36 @@ def _finding_row(f: dict[str, Any], *, actions: bool = True) -> str:
     action_cell = ""
     if actions:
         fid = int(f.get("id", 0))
-        action_cell = "<td>" + "".join(
-            f"<form class='inline' method='post' action='/findings/{fid}/{verb}'>"
-            f"<button type='submit'>{label}</button></form> "
-            for verb, label in (
-                ("flag", "Flag"),
-                ("archive", "Archive"),
-                ("suppress", "Suppress"),
-                ("triage", "Re-triage"),
+        action_cell = (
+            "<td>"
+            + "".join(
+                f"<form class='inline' method='post' action='/findings/{fid}/{verb}'>"
+                f"<button type='submit'>{label}</button></form> "
+                for verb, label in (
+                    ("flag", "Flag"),
+                    ("archive", "Archive"),
+                    ("suppress", "Suppress"),
+                    ("triage", "Re-triage"),
+                )
             )
-        ) + "</td>"
+            + "</td>"
+        )
     return (
         "<tr>"
-        f"<td>{_severity_badge(f.get('severity',''))}</td>"
-        f"<td>{escape(f.get('hostname',''))}</td>"
-        f"<td>{escape(f.get('title',''))}<br><span class='muted'>"
+        f"<td>{_severity_badge(f.get('severity', ''))}</td>"
+        f"<td>{escape(f.get('hostname', ''))}</td>"
+        f"<td>{escape(f.get('title', ''))}<br><span class='muted'>"
         f"{escape(f.get('message') or '')}</span></td>"
         f"<td>{technique}</td>"
-        f"<td><code>{escape(f.get('status',''))}</code> "
-        f"<span class='muted'>&times;{escape(str(f.get('seen_count',1)))}</span></td>"
+        f"<td><code>{escape(f.get('status', ''))}</code> "
+        f"<span class='muted'>&times;{escape(str(f.get('seen_count', 1)))}</span></td>"
         f"<td>{escape(evidence)}</td>"
         f"{action_cell}"
         "</tr>"
     )
 
 
-def findings_table(
-    findings: list[dict[str, Any]], title: str, *, actions: bool = True
-) -> str:
+def findings_table(findings: list[dict[str, Any]], title: str, *, actions: bool = True) -> str:
     """Render a findings table page."""
     if not findings:
         body = f"<h2>{escape(title)}</h2><p class='muted'>No findings.</p>"
@@ -164,14 +166,16 @@ def findings_table(
 def endpoints_table(endpoints: list[dict[str, Any]]) -> str:
     """Render the endpoints registry page."""
     if not endpoints:
-        return page("WynDoze-InfoScanOverload Endpoints", "<h2>Endpoints</h2><p class='muted'>None yet.</p>")
+        return page(
+            "WynDoze-InfoScanOverload Endpoints", "<h2>Endpoints</h2><p class='muted'>None yet.</p>"
+        )
     rows = "".join(
         "<tr>"
-        f"<td>{escape(e.get('hostname',''))}</td>"
+        f"<td>{escape(e.get('hostname', ''))}</td>"
         f"<td>{escape(e.get('fqdn') or '')}</td>"
-        f"<td><code>{escape(e.get('role','unknown'))}</code></td>"
-        f"<td>{escape(e.get('first_seen_utc',''))}</td>"
-        f"<td>{escape(e.get('last_seen_utc',''))}</td>"
+        f"<td><code>{escape(e.get('role', 'unknown'))}</code></td>"
+        f"<td>{escape(e.get('first_seen_utc', ''))}</td>"
+        f"<td>{escape(e.get('last_seen_utc', ''))}</td>"
         "</tr>"
         for e in endpoints
     )
