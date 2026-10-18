@@ -12,9 +12,7 @@ DEFAULT_PACK_NAME = "windows_default.yaml"
 
 def default_rule_pack() -> RulePack:
     """Load the rule pack bundled with the package."""
-    with resources.as_file(
-        resources.files(__package__).joinpath(DEFAULT_PACK_NAME)
-    ) as path:
+    with resources.as_file(resources.files(__package__).joinpath(DEFAULT_PACK_NAME)) as path:
         return load_rule_pack(Path(path))
 
 

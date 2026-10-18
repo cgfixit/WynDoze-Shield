@@ -363,9 +363,7 @@ def collect_report(config: AgentConfig) -> ScanReport:
         role=config.role or EndpointRole.UNKNOWN,
         platform=collect_platform(),
         ip_addresses=collect_ip_addresses(),
-        processes=collect_processes(
-            config.process_limit, include_cmdline=config.collect_cmdline
-        ),
+        processes=collect_processes(config.process_limit, include_cmdline=config.collect_cmdline),
         listening_connections=collect_listening_connections(config.connection_limit),
         services=collect_services(config.service_limit, config.command_timeout_s),
         installed_software=collect_software(config.software_limit, config.command_timeout_s),
