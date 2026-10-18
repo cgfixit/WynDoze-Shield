@@ -145,6 +145,7 @@ class ScanReport(BaseModel):
     services: list[ServiceInfo] = Field(default_factory=list, max_length=5000)
     installed_software: list[SoftwareInfo] = Field(default_factory=list, max_length=5000)
     local_admins: list[ShortStr] = Field(default_factory=list, max_length=1000)
+    local_admin_sids: dict[ShortStr, ShortStr] = Field(default_factory=dict, max_length=1000)
     cmdline_flags: list[ShortStr] = Field(default_factory=list, max_length=32)
     observations: list[Observation] = Field(default_factory=list, max_length=5000)
 
