@@ -93,6 +93,15 @@ CREATE INDEX IF NOT EXISTS idx_findings_hostname ON findings(hostname);
 """
 
 _VALID_STATUS = {s.value for s in FindingStatus}
+_PUBLIC_SCAN_SQL = """
+SELECT id, received_at_utc, hostname, fqdn, role, scan_time_utc,
+       platform_system, platform_release,
+       finding_count, critical_count, high_count, medium_count, low_count
+FROM scans
+ORDER BY received_at_utc DESC
+LIMIT ?
+"""
+
 _IS_WINDOWS = os.name == "nt"
 
 
@@ -248,6 +257,12 @@ class Storage:
         )
 
     # -- reads -------------------------------------------------------------
+    def list_scans_public(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return recent scans without raw JSON or IP address blobs."""
+        with self._connect() as conn:
+            rows = conn.execute(_PUBLIC_SCAN_SQL, (limit,)).fetchall()
+        return [dict(row) for row in rows]
+
     def list_scans(self, limit: int = 100) -> list[dict[str, Any]]:
         """Return recent scans, newest first."""
         with self._connect() as conn:
@@ -290,6 +305,19 @@ class Storage:
                 endpoints.append(endpoint)
         return endpoints
 
+    def open_finding_counts(self) -> dict[str, int]:
+        """Count triage and flagged findings for each hostname.
+
+        The predicate matches ``summary``: ``status IN ('triage','flagged')``.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT hostname, COUNT(*) AS c FROM findings
+                   WHERE status IN ('triage','flagged')
+                   GROUP BY hostname"""
+            ).fetchall()
+        return {str(row["hostname"]): int(row["c"]) for row in rows}
+
     def list_findings(
         self,
         status: str | None = None,
@@ -298,16 +326,21 @@ class Storage:
         hostname: str | None = None,
         severity: str | None = None,
         rule_id: str | None = None,
+        scan_id: int | None = None,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Return a stable page; None explicitly selects every row for exports."""
         query = "SELECT * FROM findings WHERE 1=1"
         params: list[Any] = []
+        if status == "active":
+            query += " AND status IN ('triage','flagged')"
+            status = None
         for column, value in (
             ("status", status),
             ("hostname", hostname),
             ("severity", severity),
             ("rule_id", rule_id),
+            ("scan_id", scan_id),
         ):
             if value is not None:
                 query += f" AND {column} = ?"

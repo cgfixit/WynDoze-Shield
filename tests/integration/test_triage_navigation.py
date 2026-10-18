@@ -1,6 +1,7 @@
 """Authenticated triage navigation with synthetic evidence and review decisions."""
 
 import re
+from html import unescape
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -149,3 +150,32 @@ def test_triage_defaults_to_unreviewed_and_actions_keep_origin_guard(client):
     )
     response = client.get("/triage", auth=AUTH)
     assert str(finding_id) not in _ids(response.text)
+
+
+@pytest.mark.parametrize("path", ["/triage", "/timeline"])
+def test_actions_return_to_the_filtered_page(client, path):
+    params = {"hostname": "synthetic-a", "severity": "high", "page": "2"}
+    page = client.get(path, params=params, auth=AUTH)
+    finding_id = _ids(page.text)[0]
+    target = unescape(re.search(r'name="next" value="([^"]+)"', page.text)[1])
+    result = client.post(
+        f"/findings/{finding_id}/flag",
+        data={"next": target},
+        auth=AUTH,
+        follow_redirects=False,
+    )
+    assert result.status_code == 303
+    location = urlparse(result.headers["location"])
+    assert location.path == path
+    returned = parse_qs(location.query)
+    for key, value in params.items():
+        assert returned[key] == [value]
+    # The exact rule filter survives the same action boundary.
+    rule_target = f"{path}?hostname=synthetic-a&rule_id=rule-1&page=1"
+    result = client.post(
+        f"/findings/{finding_id}/archive",
+        data={"next": rule_target},
+        auth=AUTH,
+        follow_redirects=False,
+    )
+    assert parse_qs(urlparse(result.headers["location"]).query)["rule_id"] == ["rule-1"]

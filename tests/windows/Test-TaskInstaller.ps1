@@ -46,18 +46,20 @@ New-Item -ItemType Directory -Path $root | Out-Null
 try {
     $state = Join-Path $root ("state " + [char]0x00E9 + " with ' apostrophe")
     $exe = Join-Path $root "fake agent.ps1"
-    '@{ Args = $args } | ConvertTo-Json | Set-Content -LiteralPath $env:WYNDOZE_TEST_ARGS; $global:LASTEXITCODE = 3' |
+    '@{ Args = $args; Token = $env:RECON_AGENT_TOKEN; Key = $env:RECON_AGENT_ENCRYPTION_KEY } | ConvertTo-Json | Set-Content -LiteralPath $env:WYNDOZE_TEST_ARGS; $global:LASTEXITCODE = 3' |
         Set-Content -LiteralPath $exe -Encoding UTF8
     $env:WYNDOZE_TEST_ARGS = Join-Path $root "args.json"
+    $env:Scanz_AGENT_TOKEN = ""
+    $env:Scanz_AGENT_ENCRYPTION_KEY = ""
     $env:RECON_AGENT_TOKEN = "synthetic-test-token"
     $env:RECON_AGENT_ENCRYPTION_KEY = "synthetic-test-key"
     $global:WynDozeAclExit = 0
-    $installer = Join-Path $PSScriptRoot "../../deploy/windows/Install-ReconAgentTask.ps1"
+    $installer = Join-Path $PSScriptRoot "../../deploy/windows/Install-ScanneragentTask.ps1"
     & $installer -ServerUrl "https://example.invalid/api/scans" -Role workstation `
         -PythonExe $exe -StateDir $state -CacheDir (Join-Path $root "cache with spaces")
     Assert-True ($global:WynDozeTaskFixture.Trigger.RandomDelay.TotalMinutes -eq 30) "Jitter must be on trigger"
     Assert-True ($global:WynDozeTaskFixture.Principal.UserId -eq "SYSTEM") "SYSTEM principal preserved"
-    $wrapper = Join-Path $state "Invoke-ReconAgentScan.ps1"
+    $wrapper = Join-Path $state "Invoke-ScanzAgentScan.ps1"
     $expected = '-NoProfile -NonInteractive -File "' + $wrapper + '"'
     Assert-True ($global:WynDozeTaskFixture.Action.Argument -eq $expected) "Native -File path needs double quotes"
     $engine = (Get-Process -Id $PID).Path
@@ -66,6 +68,19 @@ try {
     $seen = Get-Content -Raw -LiteralPath $env:WYNDOZE_TEST_ARGS | ConvertFrom-Json
     Assert-True ($seen.Args[0] -eq "scan") "Wrapper must call scan"
     Assert-True ($seen.Args[4] -eq "workstation") "Role argument preserved"
+    Assert-True ($seen.Token -eq "synthetic-test-token") "Legacy token reaches agent"
+    Assert-True ($seen.Key -eq "synthetic-test-key") "Legacy key reaches agent"
+    $env:Scanz_AGENT_TOKEN = "synthetic-alias-token"
+    $env:Scanz_AGENT_ENCRYPTION_KEY = "synthetic-alias-key"
+    & $installer -ServerUrl "https://example.invalid/api/scans" -Role workstation `
+        -PythonExe $exe -StateDir $state -CacheDir (Join-Path $root "cache with spaces")
+    & $engine -NoProfile -NonInteractive -File $wrapper
+    $seen = Get-Content -Raw -LiteralPath $env:WYNDOZE_TEST_ARGS | ConvertFrom-Json
+    Assert-True ($seen.Token -eq "synthetic-alias-token") "Alias token overrides legacy input"
+    Assert-True ($seen.Key -eq "synthetic-alias-key") "Alias key overrides legacy input"
+    $saved = Get-Content -LiteralPath (Join-Path $state "agent.env")
+    Assert-True ($saved -contains "RECON_AGENT_TOKEN=synthetic-alias-token") "Canonical token key stored"
+    Assert-True ($saved -contains "RECON_AGENT_ENCRYPTION_KEY=synthetic-alias-key") "Canonical encryption key stored"
     $global:WynDozeTaskFixture = $null
     $global:WynDozeAclExit = 5
     $failed = $false

@@ -41,6 +41,7 @@ dev = [
 [project.scripts]
 WynDoze-InfoScanOverload-agent = "wyndoze_infoscanoverload.agent.cli:main"
 WynDoze-InfoScanOverload-server = "wyndoze_infoscanoverload.server.__main__:main"
+WynDoze-InfoScanOverload-desktop = "wyndoze_infoscanoverload.desktop:main"
 
 [tool.hatch.version]
 path = "src/wyndoze_infoscanoverload/_version.py"

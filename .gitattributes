@@ -1,0 +1,5 @@
+# Store text as LF. Windows checkouts convert on the way out.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.pdf binary
+*.sqlite3 binary

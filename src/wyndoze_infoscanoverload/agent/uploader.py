@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from wyndoze_infoscanoverload._version import __version__
 from wyndoze_infoscanoverload.core.models import ScanReport
 
 logger = logging.getLogger("wyndoze_infoscanoverload.agent.uploader")
@@ -56,7 +57,7 @@ def upload_report(
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
-        "User-Agent": "WynDoze-InfoScanOverload-agent/1.0",
+        "User-Agent": f"WynDoze-InfoScanOverload-agent/{__version__}",
     }
     assert_upload_url(server_url)
     body = report.model_dump()

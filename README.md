@@ -22,8 +22,7 @@ Shows collection health and triage with synthetic endpoint data.
 
 **[Desktop launch, scan, and dashboard — 29 seconds](screenshots/demo/wyndoze-shield-desktop-29s.mp4).**
 Shows the native Tk launcher on macOS, a synthetic scan starting, and opening the
-local web dashboard. The desktop launcher is maintained on
-[`grok/desktop-launcher`](https://github.com/cgfixit/WynDoze-Shield/tree/grok/desktop-launcher).
+local web dashboard. The desktop launcher ships in the main package.
 The recording predates the copyable password field; its displayed session
 password belongs to a terminated demo session. These previews are demonstrations,
 not native Windows acceptance evidence.
@@ -45,7 +44,9 @@ not native Windows acceptance evidence.
   are deduplicated per (host, rule, evidence) so recurring conditions bump a
   `seen_count` instead of spamming the inbox.
 
-Dashboard finding tables show 50 rows per page, with host, severity, status, and
+Triage uses decision cards, with low/info grouped unless filtered. Suppress asks
+for confirmation. Timeline includes recent redacted scan summaries.
+Dashboard finding lists show 50 rows per page, with host, severity, status, and
 rule filters. Finding titles open complete escaped evidence and matching-scan times. CSV, Markdown, JSON, and Sentinel
 exports include every stored finding, including archived and suppressed rows.
 Full exports are rendered in memory, so their memory use grows with the result set.
@@ -61,7 +62,8 @@ changed evidence creates a separate finding for review.
 - No credential-store collection. Opt-in command lines can contain secrets;
   retained lines are encrypted, not redacted.
 - No active network scanning — only local listening-socket state.
-- No outbound cloud calls except the single HTTPS upload to *your* server.
+- No telemetry export. Outbound connections are agent uploads to your server
+  and, only when configured, SMTP alerts to your chosen mail server.
 
 ---
 
@@ -123,14 +125,24 @@ python -m pip install -e ".[server,dev]"
 
 `requirements.txt` and `constraints.txt` repeat those floors. They are not a lock.
 
-Two console scripts are installed:
+Three console scripts are installed:
 
 - `WynDoze-InfoScanOverload-agent` — the endpoint agent CLI
 - `WynDoze-InfoScanOverload-server` — the dashboard server (uvicorn wrapper)
+- `WynDoze-InfoScanOverload-desktop` — the Tk desktop launcher (requires Tk and server dependencies)
 
 ---
 
 ## Quick start
+
+For the desktop window on Windows, run
+`.\.venv\Scripts\WynDoze-InfoScanOverload-desktop.exe`. Choose **Start dashboard**,
+then **Run scan** to collect a local JSON report. This button does not upload
+findings; use the agent upload command below to populate the dashboard. Open `http://127.0.0.1:8000/` and sign in as `admin` using the
+window's selectable password (Ctrl+C copies it). The launcher keeps the password
+for that window only. The current-user schedule collects a local JSON report;
+it does not upload. See [the desktop guide](user-guide.md#desktop-launcher) for
+scheduling and opt-in mail settings. Server Core uses the CLI paths below.
 
 **1. Start the server** on loopback. Both secrets are required:
 
@@ -276,8 +288,11 @@ See [`deploy/`](deploy/):
 - **Linux (systemd):** `deploy/systemd/WynDoze-InfoScanOverload-agent.{service,timer}` — a hardened
   daily one-shot timer. Copy secrets to `/etc/recon/agent.env` (see
   `deploy/agent.env.example`).
-- **Windows:** `deploy/windows/Install-ReconAgentTask.ps1` registers a daily
-  SYSTEM task when you run it. It copies the session token and key into
+- **Windows:** `deploy/windows/Install-ScanneragentTask.ps1` registers a daily
+  SYSTEM task named `ScanzAgentDailyScan` when you run it. It accepts
+  `Scanz_AGENT_TOKEN` / `Scanz_AGENT_ENCRYPTION_KEY`, falling back to `RECON_AGENT_*`.
+  The aliases take precedence when both are set. It writes canonical `RECON_AGENT_*`
+  keys consumed by the agent into
   `C:\ProgramData\WynDoze-InfoScanOverload\agent.env` and locks that file to SYSTEM and
   Administrators. This tree does not register the task for you.
   The dashboard database defaults to `C:\ProgramData\WynDoze-InfoScanOverload\WynDoze-InfoScanOverload.sqlite3`.
@@ -297,7 +312,9 @@ Put the server behind a TLS-terminating reverse proxy in production.
 ruff check src tests        # lint (ruff "ALL" ruleset)
 ruff format src tests       # format
 mypy src                    # strict type check
-pytest -q                   # unit + integration tests
+mypy --platform win32 src   # Windows-only paths
+python .agents/skills/invariant-guard/check_invariants.py
+# Exercise affected paths locally; hosted CI runs full regression/platform coverage.
 ```
 
 Project layout:
@@ -307,7 +324,9 @@ src/wyndoze_infoscanoverload/
 ├── core/         # domain: models, severity, MITRE catalog, rules engine
 │   └── rulepacks/  # bundled YAML rule packs
 ├── agent/        # collectors, encrypted cache, uploader, Typer CLI
-└── server/       # FastAPI app, SQLite storage, HTML templates, exports
+├── server/       # FastAPI app, SQLite storage, HTML templates, exports
+├── desktop.py    # Tk launcher and current-user scheduling
+└── alerts.py     # opt-in SMTP submission
 ```
 
 ---

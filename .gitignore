@@ -241,6 +241,8 @@ htmlcov/
 *.sqlite3-wal
 *.sqlite3-shm
 *.sqlite3-journal
+*.sqlite3.old
+*.old
 *.log
 *.WynDoze-InfoScanOverload-bundle
 WynDoze-InfoScanOverload-cache/

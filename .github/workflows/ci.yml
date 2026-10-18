@@ -33,12 +33,20 @@ jobs:
       - name: Install quality tools
         # Keep the ALL lint policy stable as Ruff adds rules in new releases.
         run: python -m pip install -e ".[server,dev]" "ruff==0.17.1"
+      - name: Check design invariants
+        run: python .agents/skills/invariant-guard/check_invariants.py
+      - name: Verify invariant checker
+        run: bash .agents/skills/invariant-guard/verify.sh
       - name: Lint
         run: python -m ruff check src tests
       - name: Check formatting
         run: python -m ruff format --check src tests
       - name: Type check
         run: python -m mypy src
+      - name: Type check Windows paths
+        run: python -m mypy --platform win32 src
+      - name: Run Linux regressions with coverage
+        run: python -m pytest -q --cov=wyndoze_infoscanoverload --cov-report=term-missing --cov-fail-under=80
       - name: Build wheel
         run: python -m pip wheel --no-deps --wheel-dir dist .
 

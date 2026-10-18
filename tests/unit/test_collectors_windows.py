@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from wyndoze_infoscanoverload.agent.collectors import (
@@ -13,14 +15,18 @@ from wyndoze_infoscanoverload.agent.collectors import (
 )
 from wyndoze_infoscanoverload.core.models import SoftwareInfo
 
+# The "oem" codec exists only on Windows. cp437 is the US OEM code page, so the
+# round trip still proves OEM bytes are not UTF-8 on the Linux CI leg.
+_OEM = "oem" if sys.platform == "win32" else "cp437"
+
 
 def test_oem_display_name_round_trip() -> None:
     name = "Äpfelbüchse"
-    blob = f"    DisplayName    REG_SZ    {name}\n".encode("oem")
+    blob = f"    DisplayName    REG_SZ    {name}\n".encode(_OEM)
     as_utf8 = blob.decode("utf-8", errors="replace")
     assert name not in as_utf8
     found: dict[str, SoftwareInfo] = {}
-    assert _consume_software_lines(blob.decode("oem"), 10, found) is False
+    assert _consume_software_lines(blob.decode(_OEM), 10, found) is False
     assert list(found) == [name]
 
 

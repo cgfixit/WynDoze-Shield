@@ -8,6 +8,7 @@ Reference for the working tree at version 1.0.0. Behavior below matches the code
 |---|---|---|
 | `WynDoze-InfoScanOverload-agent` | `wyndoze_infoscanoverload.agent.cli:main` | Collect, upload, bundle, replay, evaluate |
 | `WynDoze-InfoScanOverload-server` | `wyndoze_infoscanoverload.server.__main__:main` | Loopback dashboard and ingest |
+| `WynDoze-InfoScanOverload-desktop` | `wyndoze_infoscanoverload.desktop:main` | Windows window for scan, dashboard, schedule, and opt-in SMTP alerts |
 
 Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and `version`.
 
@@ -24,15 +25,23 @@ platform-scoped and empty service inventories do not prove a missing service.
 | `GET /api/health` | none | 200 and `{"status":"ok"}` |
 | `POST /api/scans` | bearer `RECON_INGEST_TOKEN` | 201, or 401, or 413 over 8 MiB, or 422 when the JSON is not a report |
 | `GET /`, `/triage`, `/timeline`, `/endpoints`, `/reports/summary` | basic auth | HTML |
+| `GET /findings/{id}` | basic auth | Complete escaped evidence and matching-scan times, or 404 |
+| `GET /findings/{id}/suppress/confirm` | basic auth | HTML confirm page. Cancel does not write. Confirm posts `suppress`. |
+| `GET /scans/{id}` | basic auth | HTML scan facts, or 404 when the scan is missing or unreadable |
 | `POST /findings/{id}/{action}` | basic auth, and a matching `Origin` when that header is present | 303, 403, or 404 |
 | `GET /export/findings.{fmt}` | basic auth | `csv`, `md`, `json`, or `sentinel` |
 | `/docs`, `/redoc`, `/openapi.json` | none | 404 |
 
-Actions are `flag`, `archive`, `suppress`, and `triage`.
+Actions are `flag`, `archive`, `suppress`, and `triage`. Suppress asks for
+confirmation. Cards group low/info findings unless filtered. Timeline combines
+paginated findings with the 100 most recent public scan summaries; a scan page
+shows at most 500 findings last touched by that scan, with a cap notice.
 
-Finding tables use 50-row pages with stable severity/time/ID ordering. Optional
+Finding lists use 50-row pages with stable severity/time/ID ordering. Optional
 `hostname`, `rule_id`, `severity`, `status`, and `page` query parameters filter
-`/triage` and `/timeline`; the inbox defaults to triage. `/findings/{id}` requires
+`/triage` and `/timeline`; `host` is a compatible alias for `hostname`.
+`status=active` includes triage and flagged. The inbox defaults to triage.
+Actions retain the current filters and page. `/findings/{id}` requires
 dashboard authentication and shows complete escaped evidence and matching-scan
 times. Invalid filter/page values return 422; absent findings return 404.
 Repeated evidence preserves operator status; changed evidence creates a new row. Authenticated CSV, Markdown, JSON, and
@@ -64,6 +73,22 @@ Startup creates a missing database parent privately and preserves existing direc
 permissions. Server/development FastAPI floors are 0.143.0.
 
 FastAPI telemetry flags are forced off inside `create_app`. `OTEL_SDK_DISABLED` is set to `true`.
+
+## Desktop and optional mail
+
+The Tk launcher generates per-window credentials and exposes the password as a
+selectable read-only field. Its current-user `WynDoze-InfoScanOverload-scan` task
+collects locally without upload. The separate SYSTEM installer is
+`deploy/windows/Install-ScanneragentTask.ps1`, default task `ScanzAgentDailyScan`.
+It accepts Scanz credential aliases (preferred) or RECON inputs and writes
+canonical `RECON_AGENT_*` keys. Systemd uses those same canonical keys.
+
+`RECON_ALERTS=1` enables SMTP only with `RECON_SMTP_HOST`, `RECON_SMTP_USER`,
+`RECON_SMTP_PASSWORD`, and `RECON_ALERT_TO`. `RECON_SMTP_PORT` defaults to 587
+(STARTTLS); 465 uses TLS. Mail contains hostname and up to 40 finding summaries
+per accepted scan, including repeats. Delivery runs in a worker after the 201
+response and is best-effort, without durable retries. Header/SMTP failures are
+logged without changing the persisted scan. No raw command lines are included.
 
 ## Limits
 

@@ -9,7 +9,9 @@
     only. A wrapper script loads that file into the task process and then
     starts WynDoze-InfoScanOverload-agent.exe. Nothing is written with Set-Item to Machine scope.
 
-    Set these in the current session before you run this script as admin:
+    Set Scanz_AGENT_TOKEN and Scanz_AGENT_ENCRYPTION_KEY in this session first.
+    RECON_AGENT_TOKEN and RECON_AGENT_ENCRYPTION_KEY are fallback inputs.
+    The env file uses the RECON_AGENT_* names consumed by the Python agent.
 
 .PARAMETER ServerUrl
 
@@ -51,7 +53,9 @@ function Protect-ScanzPath {
 }
 
 $token = [Environment]::GetEnvironmentVariable("Scanz_AGENT_TOKEN", "Process")
+if (-not $token) { $token = [Environment]::GetEnvironmentVariable("RECON_AGENT_TOKEN", "Process") }
 $key = [Environment]::GetEnvironmentVariable("Scanz_AGENT_ENCRYPTION_KEY", "Process")
+if (-not $key) { $key = [Environment]::GetEnvironmentVariable("RECON_AGENT_ENCRYPTION_KEY", "Process") }
 if (-not $token -or -not $key) {
     throw "Set Scanz_AGENT_TOKEN and Scanz_AGENT_ENCRYPTION_KEY in this session before registering the task."
 }
@@ -67,8 +71,8 @@ $quotedExe = ConvertTo-QuotedArg $PythonExe
 $quotedEnv = ConvertTo-QuotedArg $envFile
 
 @(
-    "Scanz_AGENT_TOKEN=$token"
-    "Scanz_AGENT_ENCRYPTION_KEY=$key"
+    "RECON_AGENT_TOKEN=$token"
+    "RECON_AGENT_ENCRYPTION_KEY=$key"
 ) | Set-Content -LiteralPath $envFile -Encoding ascii
 Protect-ScanzPath -Path $envFile
 

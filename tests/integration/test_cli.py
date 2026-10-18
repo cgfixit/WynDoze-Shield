@@ -174,3 +174,112 @@ def test_evaluate_local(tmp_path: Path) -> None:
     result = runner.invoke(app, ["evaluate-local", str(out)])
     assert result.exit_code == 0
     assert result.stdout.strip().startswith("[")
+
+
+REPLAY = ["replay", "--server-url", "http://127.0.0.1:8000/api/scans", "--cache-dir"]
+
+
+def _stub_collect(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "wyndoze_infoscanoverload.agent.cli.collect_report",
+        lambda _config: clean_report_stub(),
+    )
+
+
+def _fresh_key() -> str:
+    return runner.invoke(app, ["gen-key"]).stdout.strip()
+
+
+def test_bundle_then_replay_round_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _stub_collect(monkeypatch)
+    env = {"RECON_AGENT_ENCRYPTION_KEY": _fresh_key(), "RECON_AGENT_TOKEN": "t"}
+
+    written = runner.invoke(
+        app, ["bundle", "--role", "workstation", "--cache-dir", str(tmp_path)], env=env
+    )
+    assert written.exit_code == 0, written.output
+    bundles = list(tmp_path.glob("*.WynDoze-InfoScanOverload-bundle"))
+    assert len(bundles) == 1
+    assert b"WS-001" not in bundles[0].read_bytes()
+
+    sent: list[str] = []
+
+    def fake_upload(report: ScanReport, *_args: object, **_kwargs: object) -> dict[str, str]:
+        sent.append(report.hostname)
+        return {"status": "accepted"}
+
+    monkeypatch.setattr("wyndoze_infoscanoverload.agent.cli.upload_report", fake_upload)
+    replayed = runner.invoke(app, [*REPLAY, str(tmp_path)], env=env)
+    assert replayed.exit_code == 0, replayed.output
+    assert sent == ["WS-001"]
+    assert list(tmp_path.glob("*.WynDoze-InfoScanOverload-bundle")) == []
+
+
+def test_replay_keeps_bundle_on_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _stub_collect(monkeypatch)
+    env = {"RECON_AGENT_ENCRYPTION_KEY": _fresh_key(), "RECON_AGENT_TOKEN": "t"}
+    runner.invoke(app, ["bundle", "--cache-dir", str(tmp_path)], env=env)
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        msg = "server down"
+        raise UploadError(msg)
+
+    monkeypatch.setattr("wyndoze_infoscanoverload.agent.cli.upload_report", fail)
+    result = runner.invoke(app, [*REPLAY, str(tmp_path)], env=env)
+    assert result.exit_code == 1
+    assert "1 failed" in result.output
+    assert len(list(tmp_path.glob("*.WynDoze-InfoScanOverload-bundle"))) == 1
+
+
+def test_replay_with_empty_cache_is_a_no_op(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [*REPLAY, str(tmp_path)],
+        env={"RECON_AGENT_ENCRYPTION_KEY": _fresh_key(), "RECON_AGENT_TOKEN": "t"},
+    )
+    assert result.exit_code == 0
+    assert "No cached bundles" in result.output
+
+
+def test_replay_requires_token_and_key(tmp_path: Path) -> None:
+    args = [*REPLAY, str(tmp_path)]
+    assert runner.invoke(app, args, env={"RECON_AGENT_TOKEN": ""}).exit_code == 2
+    no_key = runner.invoke(
+        app, args, env={"RECON_AGENT_TOKEN": "t", "RECON_AGENT_ENCRYPTION_KEY": ""}
+    )
+    assert no_key.exit_code == 2
+
+
+def test_bundle_requires_key(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["bundle", "--cache-dir", str(tmp_path)], env={"RECON_AGENT_ENCRYPTION_KEY": ""}
+    )
+    assert result.exit_code == 2
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_evaluate_local_reads_a_bundle_only_with_the_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_collect(monkeypatch)
+    key = _fresh_key()
+    runner.invoke(
+        app, ["bundle", "--cache-dir", str(tmp_path)], env={"RECON_AGENT_ENCRYPTION_KEY": key}
+    )
+    (bundle_path,) = tmp_path.glob("*.WynDoze-InfoScanOverload-bundle")
+    locked = runner.invoke(
+        app, ["evaluate-local", str(bundle_path)], env={"RECON_AGENT_ENCRYPTION_KEY": ""}
+    )
+    assert locked.exit_code == 2
+    opened = runner.invoke(
+        app, ["evaluate-local", str(bundle_path)], env={"RECON_AGENT_ENCRYPTION_KEY": key}
+    )
+    assert opened.exit_code == 0, opened.output
+
+
+def test_evaluate_local_rejects_garbage(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    assert runner.invoke(app, ["evaluate-local", str(bad)]).exit_code == 2
+    missing = tmp_path / "missing.json"
+    assert runner.invoke(app, ["evaluate-local", str(missing)]).exit_code == 2

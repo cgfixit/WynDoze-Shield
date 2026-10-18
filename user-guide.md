@@ -20,7 +20,39 @@ python -m pip install -e ".[server,dev]"
 
 `pyproject.toml` is the source of truth. `requirements.txt` and `constraints.txt` repeat the same floors. They are not a lock.
 
-You should see `WynDoze-InfoScanOverload-agent.exe` and `WynDoze-InfoScanOverload-server.exe` under `.venv\Scripts`.
+You should see `WynDoze-InfoScanOverload-agent.exe`, `WynDoze-InfoScanOverload-server.exe`, and `WynDoze-InfoScanOverload-desktop.exe` under `.venv\Scripts`.
+
+## Desktop launcher
+
+On a Windows desktop with Tk installed, run:
+
+```powershell
+.\.venv\Scripts\WynDoze-InfoScanOverload-desktop.exe
+```
+
+Choose the scan role, click **Start dashboard**, then **Run scan** to
+collect a local JSON report. This button does not upload; use the CLI upload
+command below to populate the dashboard. Open
+`http://127.0.0.1:8000/` in your browser. Sign in as `admin`; select the password
+in the read-only field and press Ctrl+C, then paste it into the browser. Each
+window generates new credentials. **Stop dashboard** stops its server process.
+
+**Create scheduled task** registers `WynDoze-InfoScanOverload-scan` for the current
+user at 02:30 with the selected cadence. It collects to
+`%LOCALAPPDATA%\WynDoze-InfoScanOverload\scheduled-scan.json` without uploading or
+sending mail. That file contains unencrypted inventory. Restrict and remove it
+according to your retention policy. The SYSTEM task described below is separate.
+
+Email alerts are off by default. Before starting the dashboard, enable the mail
+checkbox and supply host, port, username, password, and recipient. SMTP uses
+STARTTLS (default port 587), or TLS on port 465. Each accepted scan sends a
+hostname and up to 40 finding summaries, including repeated findings, to that
+recipient. Credentials stay in the window/server process environment. Restart
+the dashboard to apply changed mail settings. Mail failures are logged without
+rejecting an accepted scan. Delivery runs in a worker after the ingest response;
+it is best-effort, without a durable queue or retry guarantee. No live mail service is required to use the app.
+
+Use the CLI below on Server Core or installations without Tk.
 
 ## Start the dashboard
 
@@ -110,11 +142,15 @@ is not trusted just because its last component matches. Older reports without
 SIDs need explicit qualified-name entries in a custom rule pack to allow such
 principals. Tune the supplied policy to your estate.
 
-Sign in, then open **Triage Inbox**. Flag, archive, suppress, or send a finding back to triage from that page. A browser on another origin receives 403. A request with no `Origin` header still works, which is how the local page posts.
+Sign in, then open **Triage Inbox**. Each finding is a decision card; low/info
+cards are grouped unless that severity is selected. Suppress has a confirmation
+page. Timeline also shows recent scans with redacted facts and counts. Flag, archive, suppress, or send a finding back to triage from that page. A browser on another origin receives 403. The dashboard uses `Referrer-Policy:
+same-origin` so its own browser forms retain the origin needed by this check,
+while links to other sites receive no referrer. A request with no `Origin` header still works, which is how the local page posts.
 
 Exports are CSV, Markdown, JSON, and Sentinel NDJSON. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with a single quote.
 
-Finding tables show 50 rows per page. Filter by exact hostname/rule ID, severity,
+Finding lists show 50 rows per page. Filter by exact hostname/rule ID, severity,
 or status; Next and Previous retain the selected filters. Page numbers start at 1;
 invalid page or filter values return HTTP 422. Click a finding title
 to see complete escaped evidence, first/last seen, occurrence count and the latest
@@ -156,7 +192,7 @@ multiple scans from the same host within one second.
 
 ## Schedule a daily scan
 
-Run `deploy\windows\Install-ReconAgentTask.ps1` only when you want a SYSTEM task. Set `RECON_AGENT_TOKEN` and `RECON_AGENT_ENCRYPTION_KEY` in that admin session first. The script writes `C:\ProgramData\WynDoze-InfoScanOverload\agent.env`, locks the file to SYSTEM and Administrators, and registers `ReconAgentDailyScan`. It does not write Machine environment variables.
+Run `deploy\windows\Install-ScanneragentTask.ps1` only when you want a SYSTEM task. Set `Scanz_AGENT_TOKEN` and `Scanz_AGENT_ENCRYPTION_KEY` in that admin session first, or use the existing `RECON_AGENT_TOKEN` and `RECON_AGENT_ENCRYPTION_KEY` inputs. The Scanz aliases take precedence; the generated env file always uses the `RECON_AGENT_*` keys read by the agent. The script writes `C:\ProgramData\WynDoze-InfoScanOverload\agent.env`, locks the file to SYSTEM and Administrators, and registers `ScanzAgentDailyScan`. It does not write Machine environment variables.
 
 Pass the installed `WynDoze-InfoScanOverload-agent.exe` shim to `-PythonExe`,
 rather than `python.exe`. The daily trigger adds up to 30 minutes of random
