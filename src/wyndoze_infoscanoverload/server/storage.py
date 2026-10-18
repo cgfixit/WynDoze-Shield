@@ -211,8 +211,7 @@ class Storage:
         now: str,
     ) -> None:
         key = dedupe_key(finding, hostname)
-        # If a matching finding exists AND is not archived/suppressed, bump it;
-        # archived/suppressed findings stay in their operator-chosen state.
+        # Repeated evidence preserves the analyst decision; changed evidence gets a new key.
         conn.execute(
             """
             INSERT INTO findings (
@@ -226,9 +225,7 @@ class Storage:
                 last_seen_utc=excluded.last_seen_utc,
                 seen_count=findings.seen_count + 1,
                 severity=excluded.severity,
-                status=CASE
-                    WHEN findings.status IN ('archived','suppressed')
-                    THEN findings.status ELSE 'triage' END
+                status=findings.status
             """,
             (
                 key,
@@ -294,24 +291,36 @@ class Storage:
         return endpoints
 
     def list_findings(
-        self, status: str | None = None, limit: int | None = 500
+        self,
+        status: str | None = None,
+        limit: int | None = 500,
+        *,
+        hostname: str | None = None,
+        severity: str | None = None,
+        rule_id: str | None = None,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Return sorted findings; None explicitly selects all rows for exports."""
-        query = "SELECT * FROM findings"
+        """Return a stable page; None explicitly selects every row for exports."""
+        query = "SELECT * FROM findings WHERE 1=1"
         params: list[Any] = []
-        if status:
-            query += " WHERE status = ?"
-            params.append(status)
-        # Order by severity rank desc then recency.
+        for column, value in (
+            ("status", status),
+            ("hostname", hostname),
+            ("severity", severity),
+            ("rule_id", rule_id),
+        ):
+            if value is not None:
+                query += f" AND {column} = ?"
+                params.append(value)
         query += """
             ORDER BY CASE severity
                 WHEN 'critical' THEN 4 WHEN 'high' THEN 3
                 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC,
-            last_seen_utc DESC
+            last_seen_utc DESC, id DESC
         """
         if limit is not None:
-            query += " LIMIT ?"
-            params.append(limit)
+            query += " LIMIT ? OFFSET ?"
+            params.extend((limit, offset))
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return [_row_to_finding(dict(r)) for r in rows]
