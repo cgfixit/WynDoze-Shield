@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """check_invariants.py - static checker for WynDoze-InfoScanOverload's design invariants.
 
-Usage: python3 .claude/skills/invariant-guard/check_invariants.py [--repo-root PATH]
+Usage: python3 .agents/skills/invariant-guard/check_invariants.py [--repo-root PATH]
 
 Stdlib only. It parses source with ``ast`` and never imports project code, so it
 runs in a fresh container or a CI job before ``pip install``.
@@ -19,7 +19,7 @@ runs in a fresh container or a CI job before ``pip install``.
   C2  Pinned caps         ingest 8 MiB, action body 2048 B, sealed cmdline 800 chars
   R1  Twin rule pack      both windows_default.yaml copies are identical
   R2  Closed rule kinds   _VALID_KINDS is exactly the seven documented kinds
-  D1  Recon names         deploy keeps User=recon, /opt/recon, ReconAgentDailyScan
+  D1  Deployment names         deploy keeps User=recon, /opt/recon, ScanzAgentDailyScan
   P1  Dependency fence    runtime dependencies stay inside a reviewed allowlist
 
 Exit codes: 0 all pass, 2 an invariant is violated, 3 wrong root or unparseable file.
@@ -54,6 +54,7 @@ EXPECTED_CAPS = {
     ("server/app.py", "_MAX_INGEST_BYTES"): 8 * 1024 * 1024,
     ("server/app.py", "_MAX_ACTION_BODY"): 2048,
     ("agent/cmdline.py", "_PLAIN_MAX"): 800,
+    ("agent/cmdline.py", "_PLAIN_MAX_BYTES"): 3000,
 }
 # Base and extra dependency names reviewed as local-only. A new name is a
 # deliberate review: "no dependency that sends data off the machine".
@@ -387,10 +388,10 @@ def check_deploy(c: Checker) -> None:
     service = (c.root / "deploy/systemd/WynDoze-InfoScanOverload-agent.service").read_text(
         encoding="utf-8"
     )
-    task = (c.root / "deploy/windows/Install-ReconAgentTask.ps1").read_text(encoding="utf-8")
+    task = (c.root / "deploy/windows/Install-ScanneragentTask.ps1").read_text(encoding="utf-8")
     c.check("D1", "User=recon" in service, "systemd unit runs as User=recon")
     c.check("D1", "/opt/recon/" in service, "systemd unit lives under /opt/recon")
-    c.check("D1", '"ReconAgentDailyScan"' in task, "Windows task is named ReconAgentDailyScan")
+    c.check("D1", '"ScanzAgentDailyScan"' in task, "Windows task is named ScanzAgentDailyScan")
 
 
 def check_dependencies(c: Checker) -> None:

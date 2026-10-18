@@ -1,18 +1,12 @@
 # Use WynDoze-InfoScanOverload on Windows
 
-This guide is for an operator on Windows 10 or Windows 11 with Python 3.12. It gets a loopback dashboard and one agent scan running. It does not register a scheduled task unless you run that script yourself.
-
-These commands do not run on macOS. Use the macOS block in [README.md](README.md). On macOS the agent still collects processes and listening ports. Services, installed software, and local administrator names stay empty, because those collectors run on Windows and on Linux. There is no Mac scheduled-task script in this tree. `windows-latest` is a GitHub Actions image name, not a desktop edition. The task script below is for Windows 10 and Windows 11.
+This guide targets Windows 10, Windows 11, and Windows Server 2016, 2019, 2022,
+and 2025 with Python 3.12 or newer. Examples use the minimum version, 3.12.
+Native acceptance is still required on each OS; this target list is not a
+certification. The guide gets a loopback dashboard and one agent scan running.
+It does not register a scheduled task unless you run that script yourself.
 
 Use this scanner only on systems you own or are authorized to assess.
-
-## Open the window
-
-`deploy\windows\Start-WynDoze.ps1` creates `.venv` when it is missing, installs the server extra, and opens a window. The window shows the product name, a short description, a scan role, and buttons to run a collect-only scan, start the dashboard, stop the dashboard, and open `documentation.pdf` when that file is in the project folder. Email alerts are off until you check the box and fill in the SMTP host, port, username, password, and recipient. The password stays in that process. It is not written into the repo.
-
-The generated dashboard password is in a read-only field near the top of the window. Select it with the mouse or focus the field and press Ctrl+A, then press Ctrl+C. After **Start dashboard** opens the browser, sign in as `admin` and paste the password with Ctrl+V. On macOS use Command instead of Ctrl. The field cannot change the active password; reopening the launcher generates a new one.
-
-The schedule buttons register `WynDoze-InfoScanOverload-scan` for the current user, daily, weekly, or monthly, at 02:30. That task runs `scan --no-upload`. It does not upload and it does not send mail. It is not a SYSTEM task. The existing `Install-ReconAgentTask.ps1` script is still the separate admin path for a daily SYSTEM task.
 
 ## Install
 
@@ -26,9 +20,45 @@ python -m pip install -e ".[server,dev]"
 
 `pyproject.toml` is the source of truth. `requirements.txt` and `constraints.txt` repeat the same floors. They are not a lock.
 
-You should see `WynDoze-InfoScanOverload-agent.exe` and `WynDoze-InfoScanOverload-server.exe` under `.venv\Scripts`.
+You should see `WynDoze-InfoScanOverload-agent.exe`, `WynDoze-InfoScanOverload-server.exe`, and `WynDoze-InfoScanOverload-desktop.exe` under `.venv\Scripts`.
+
+## Desktop launcher
+
+On a Windows desktop with Tk installed, run:
+
+```powershell
+.\.venv\Scripts\WynDoze-InfoScanOverload-desktop.exe
+```
+
+Choose the scan role, click **Start dashboard**, then **Run scan** to
+collect a local JSON report. This button does not upload; use the CLI upload
+command below to populate the dashboard. Open
+`http://127.0.0.1:8000/` in your browser. Sign in as `admin`; select the password
+in the read-only field and press Ctrl+C, then paste it into the browser. Each
+window generates new credentials. **Stop dashboard** stops its server process.
+
+**Create scheduled task** registers `WynDoze-InfoScanOverload-scan` for the current
+user at 02:30 with the selected cadence. It collects to
+`%LOCALAPPDATA%\WynDoze-InfoScanOverload\scheduled-scan.json` without uploading or
+sending mail. That file contains unencrypted inventory. Restrict and remove it
+according to your retention policy. The SYSTEM task described below is separate.
+
+Email alerts are off by default. Before starting the dashboard, enable the mail
+checkbox and supply host, port, username, password, and recipient. SMTP uses
+STARTTLS (default port 587), or TLS on port 465. Each accepted scan sends a
+hostname and up to 40 finding summaries, including repeated findings, to that
+recipient. Credentials stay in the window/server process environment. Restart
+the dashboard to apply changed mail settings. Mail failures are logged without
+rejecting an accepted scan. Delivery runs in a worker after the ingest response;
+it is best-effort, without a durable queue or retry guarantee. No live mail service is required to use the app.
+
+Use the CLI below on Server Core or installations without Tk.
 
 ## Start the dashboard
+
+The server requires FastAPI 0.143.0+. A missing database parent is created with
+access for its owner, SYSTEM, and Administrators. Existing directory permissions
+are preserved. ACL setup failures prevent database creation.
 
 Set both secrets. An unset or empty value returns 401.
 
@@ -48,6 +78,7 @@ In a second shell, with the venv active:
 
 ```powershell
 $env:RECON_AGENT_TOKEN = "devtoken"
+$env:RECON_AGENT_ENCRYPTION_KEY = .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe gen-key
 .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe scan --server-url http://127.0.0.1:8000/api/scans --role workstation
 ```
 
@@ -75,6 +106,12 @@ Command lines may include passwords or tokens supplied to other programs.
 Sealing encrypts the retained text; it does not redact embedded secrets. Leave
 command-line collection off unless you need it and have authorized its use.
 
+Pattern matching examines at most 800 characters. Before encryption, the stored
+prefix is also limited to 3000 UTF-8 bytes without splitting a character. This
+keeps non-ASCII command lines within the 4096-character token field so reports
+can be uploaded and replayed. A pattern label can describe text beyond the
+shorter stored prefix.
+
 ## Stop a scan
 
 Set the kill switch before you start the agent. The process exits 0 and writes nothing.
@@ -84,19 +121,53 @@ $env:RECON_AGENT_DISABLE = "1"
 .\.venv\Scripts\WynDoze-InfoScanOverload-agent.exe scan --no-upload --output-json .\report.json --role workstation
 ```
 
+## Ingest limits
+
+The server authenticates before reading a report and returns 413 as soon as
+received body bytes exceed 8 MiB. Rejected reports are not evaluated or stored.
+This bounds accumulated application body bytes; transport buffers, the current
+ASGI chunk, concurrent requests, and valid JSON parsing also consume memory.
+
 ## Work the inbox
 
-Sign in, then open **Triage Inbox**. Each finding is a card.
+The installed v1.2 rule pack matches the source copy and contains 28 rules.
+Both files must be updated together; a regression check rejects policy drift.
+Treat tool and service presence as context for review, not a malware verdict.
+Windows-only missing-service hints require a nonempty service inventory.
 
-Flag and Archive post at once. Flag does not stick across a later scan. The next scan that sees the same evidence returns that finding to triage. Archive stays archived. Re-triage posts the finding back to the inbox.
+Local administrator names are accompanied by SIDs. Built-in Administrator
+(RID 500) and Domain Admins (RID 512) are recognized by account-domain SID,
+including renamed/localized principals. A different `DOMAIN\Administrator`
+is not trusted just because its last component matches. Older reports without
+SIDs need explicit qualified-name entries in a custom rule pack to allow such
+principals. Tune the supplied policy to your estate.
 
-Suppress opens a confirm page. Cancel returns you to the desk and does not write. Confirm posts the existing suppress action. A suppressed finding stays suppressed on later scans. The rule still runs.
-
-Open **Timeline** to see recent scans. A scan id opens that scan's public facts and the findings the scan last updated.
-
-A browser on another origin receives 403. A request with no `Origin` header still works, which is how the local page posts.
+Sign in, then open **Triage Inbox**. Each finding is a decision card; low/info
+cards are grouped unless that severity is selected. Suppress has a confirmation
+page. Timeline also shows recent scans with redacted facts and counts. Flag, archive, suppress, or send a finding back to triage from that page. A browser on another origin receives 403. A request with no `Origin` header still works, which is how the local page posts.
 
 Exports are CSV, Markdown, JSON, and Sentinel NDJSON. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with a single quote.
+
+Finding lists show 50 rows per page. Filter by exact hostname/rule ID, severity,
+or status; Next and Previous retain the selected filters. Page numbers start at 1;
+invalid page or filter values return HTTP 422. Click a finding title
+to see complete escaped evidence, first/last seen, occurrence count and the latest
+matching scan with separate collection/receipt times. Repeated identical evidence
+preserves review decisions, including Flagged. Changed evidence gets a separate
+finding. Empty results retain filter controls. All four export
+formats include the complete stored finding set, including archived and suppressed
+rows, regardless of the current filters. Full exports are rendered in memory and can be large on a busy dashboard.
+
+## Check collection health
+
+Open **Endpoints** to compare **Collected** with **Received**. An upload can
+succeed while a collector is partial, unavailable, or failed. Coverage reports
+counts, milliseconds, truncation and bounded issue categories, never command
+text or stderr. Older agents show unknown coverage. No findings does not mean
+a complete or clean scan. Reports older than `RECON_STALE_AFTER_HOURS` (36 by
+default) are overdue; future or timezone-less timestamps have unknown age.
+An air-gapped replay changes receipt time, not collection time. Missing-service
+rules are skipped when reported service coverage is incomplete.
 
 ## Keep a bundle when upload fails
 
@@ -110,8 +181,24 @@ Store that key outside the repo. On Windows the default cache directory is `%Pro
 
 For a machine with no route to the server, use `bundle`, move the `.WynDoze-InfoScanOverload-bundle` file, then `replay` with the same key and `RECON_AGENT_TOKEN`.
 
+Replay requires a matching HTTP 201 ingest acknowledgement before deleting a
+bundle. A redirect or invalid acknowledgement leaves it on disk. Corrupt or
+unreadable files stay in the cache and are reported without preventing later
+valid bundles from uploading; replay exits 1 if any file fails. Use `--keep` to
+retain successful uploads. Every save gets an exclusive filename, including
+multiple scans from the same host within one second.
+
 ## Schedule a daily scan
 
-Run `deploy\windows\Install-ReconAgentTask.ps1` only when you want a SYSTEM task. Set `RECON_AGENT_TOKEN` and `RECON_AGENT_ENCRYPTION_KEY` in that admin session first. The script writes `C:\ProgramData\WynDoze-InfoScanOverload\agent.env`, locks the file to SYSTEM and Administrators, and registers `ReconAgentDailyScan`. It does not write Machine environment variables.
+Run `deploy\windows\Install-ScanneragentTask.ps1` only when you want a SYSTEM task. Set `Scanz_AGENT_TOKEN` and `Scanz_AGENT_ENCRYPTION_KEY` in that admin session first, or use the existing `RECON_AGENT_TOKEN` and `RECON_AGENT_ENCRYPTION_KEY` inputs. The Scanz aliases take precedence; the generated env file always uses the `RECON_AGENT_*` keys read by the agent. The script writes `C:\ProgramData\WynDoze-InfoScanOverload\agent.env`, locks the file to SYSTEM and Administrators, and registers `ScanzAgentDailyScan`. It does not write Machine environment variables.
 
-Quote is already applied to the server URL and the cache directory inside the script. The task is allowed to start on battery.
+Pass the installed `WynDoze-InfoScanOverload-agent.exe` shim to `-PythonExe`,
+rather than `python.exe`. The daily trigger adds up to 30 minutes of random
+delay. Native `-File` arguments use double quotes, while values inside the
+UTF-8 wrapper use PowerShell quoting. The wrapper returns the agent exit code,
+and installation stops if a task-state ACL cannot be applied. The task is
+allowed to start on battery.
+
+The synthetic installer check resets its exit status only after all assertions
+pass, including the expected child exit and ACL failure probes. A failed assertion
+still fails the PowerShell workflow. It does not register a real task or change ACLs.

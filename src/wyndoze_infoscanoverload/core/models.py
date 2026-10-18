@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -122,6 +122,39 @@ class Observation(BaseModel):
         return Severity.INFO
 
 
+type CollectionState = Literal["ok", "partial", "unavailable", "failed"]
+type CollectionIssue = Literal[
+    "access_denied",
+    "timeout",
+    "command_failed",
+    "not_supported",
+    "invalid_output",
+    "item_skipped",
+    "limit_reached",
+    "output_truncated",
+]
+type CollectorName = Literal[
+    "ip_addresses",
+    "processes",
+    "listening_connections",
+    "services",
+    "installed_software",
+    "local_admins",
+]
+
+
+class CollectionHealth(BaseModel):
+    """Bounded coverage metadata; never command text, stderr, or credentials."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    status: CollectionState = "ok"
+    item_count: int = Field(default=0, ge=0, le=20000)
+    duration_ms: int = Field(default=0, ge=0)
+    truncated: bool = False
+    issues: list[CollectionIssue] = Field(default_factory=list, max_length=8)
+
+
 class ScanReport(BaseModel):
     """The full telemetry envelope an agent uploads.
 
@@ -145,8 +178,12 @@ class ScanReport(BaseModel):
     services: list[ServiceInfo] = Field(default_factory=list, max_length=5000)
     installed_software: list[SoftwareInfo] = Field(default_factory=list, max_length=5000)
     local_admins: list[ShortStr] = Field(default_factory=list, max_length=1000)
+    local_admin_sids: dict[ShortStr, ShortStr] = Field(default_factory=dict, max_length=1000)
     cmdline_flags: list[ShortStr] = Field(default_factory=list, max_length=32)
     observations: list[Observation] = Field(default_factory=list, max_length=5000)
+    collection_health: dict[CollectorName, CollectionHealth] = Field(
+        default_factory=dict, max_length=6
+    )
 
     @field_validator("scan_time_utc")
     @classmethod

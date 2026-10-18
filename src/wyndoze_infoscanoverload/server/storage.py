@@ -19,9 +19,12 @@ volume, retention, and the host; no endpoint-count guarantee is implied.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -98,13 +101,37 @@ FROM scans
 ORDER BY received_at_utc DESC
 LIMIT ?
 """
-_FINDING_ORDER = """
-    ORDER BY CASE severity
-        WHEN 'critical' THEN 4 WHEN 'high' THEN 3
-        WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC,
-    last_seen_utc DESC
-    LIMIT ?
-"""
+
+_IS_WINDOWS = os.name == "nt"
+
+
+def _prepare_db_parent(path: Path) -> None:
+    """Create private state without changing an operator-provisioned directory."""
+    parent = path.parent
+    try:
+        parent.mkdir(parents=True, mode=0o700)
+    except FileExistsError:
+        return
+    if _IS_WINDOWS:
+        icacls = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "icacls.exe"
+        try:
+            subprocess.run(  # noqa: S603 - fixed tool path and SID arguments, no shell
+                [
+                    os.fspath(icacls),
+                    os.fspath(parent),
+                    "/inheritance:r",
+                    "/grant:r",
+                    "*S-1-5-18:(OI)(CI)F",
+                    "*S-1-5-32-544:(OI)(CI)F",
+                    "*S-1-3-4:(OI)(CI)F",
+                ],
+                check=True,
+                capture_output=True,
+                timeout=20,
+            )
+        except (OSError, subprocess.SubprocessError):
+            parent.rmdir()
+            raise
 
 
 class Storage:
@@ -126,6 +153,7 @@ class Storage:
 
     def init_db(self) -> None:
         """Create tables and indexes if absent."""
+        _prepare_db_parent(self._db_path)
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL").fetchone()
             conn.executescript(_SCHEMA)
@@ -192,8 +220,7 @@ class Storage:
         now: str,
     ) -> None:
         key = dedupe_key(finding, hostname)
-        # If a matching finding exists AND is not archived/suppressed, bump it;
-        # archived/suppressed findings stay in their operator-chosen state.
+        # Repeated evidence preserves the analyst decision; changed evidence gets a new key.
         conn.execute(
             """
             INSERT INTO findings (
@@ -207,9 +234,7 @@ class Storage:
                 last_seen_utc=excluded.last_seen_utc,
                 seen_count=findings.seen_count + 1,
                 severity=excluded.severity,
-                status=CASE
-                    WHEN findings.status IN ('archived','suppressed')
-                    THEN findings.status ELSE 'triage' END
+                status=findings.status
             """,
             (
                 key,
@@ -253,11 +278,32 @@ class Storage:
             row = conn.execute("SELECT * FROM scans WHERE id = ?", (scan_id,)).fetchone()
         return _row_to_scan(dict(row)) if row else None
 
-    def list_endpoints(self) -> list[dict[str, Any]]:
-        """Return all known endpoints, most recently seen first."""
+    def list_endpoints(self, stale_after_hours: int = 36) -> list[dict[str, Any]]:
+        """Show collection age separately from upload receipt, including replayed reports."""
+        endpoints = []
         with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM endpoints ORDER BY last_seen_utc DESC").fetchall()
-        return [dict(r) for r in rows]
+            rows = conn.execute(
+                """SELECT e.*, s.scan_time_utc, s.raw_json FROM endpoints e
+                   LEFT JOIN scans s ON s.id=e.last_scan_id
+                   ORDER BY e.last_seen_utc DESC"""
+            )
+            for row in rows:
+                endpoint = dict(row)
+                report = json.loads(endpoint.pop("raw_json") or "{}")
+                endpoint["collection_health"] = report.get("collection_health", {})
+                endpoint["freshness"] = "unknown"
+                try:
+                    collected = datetime.fromisoformat(endpoint["scan_time_utc"])
+                    if collected.tzinfo is not None:
+                        age = (datetime.now(UTC) - collected).total_seconds()
+                        if age >= 0:
+                            endpoint["freshness"] = (
+                                "overdue" if age > stale_after_hours * 3600 else "current"
+                            )
+                except (TypeError, ValueError, AttributeError):
+                    endpoint["freshness"] = "unknown"
+                endpoints.append(endpoint)
+        return endpoints
 
     def open_finding_counts(self) -> dict[str, int]:
         """Count triage and flagged findings for each hostname.
@@ -275,38 +321,39 @@ class Storage:
     def list_findings(
         self,
         status: str | None = None,
-        limit: int = 500,
+        limit: int | None = 500,
         *,
         hostname: str | None = None,
         severity: str | None = None,
+        rule_id: str | None = None,
         scan_id: int | None = None,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Return findings, severity-sorted.
-
-        ``active`` means ``status IN ('triage','flagged')``. That list is a SQL
-        constant. The word ``active`` is never bound as a row value.
-        """
-        clauses: list[str] = []
+        """Return a stable page; None explicitly selects every row for exports."""
+        query = "SELECT * FROM findings WHERE 1=1"
         params: list[Any] = []
         if status == "active":
-            clauses.append("status IN ('triage','flagged')")
-        elif status:
-            clauses.append("status = ?")
-            params.append(status)
-        if hostname:
-            clauses.append("hostname = ?")
-            params.append(hostname)
-        if severity:
-            clauses.append("severity = ?")
-            params.append(severity)
-        if scan_id is not None:
-            clauses.append("scan_id = ?")
-            params.append(scan_id)
-        query = "SELECT * FROM findings"
-        if clauses:
-            query = query + " WHERE " + " AND ".join(clauses)
-        query = query + _FINDING_ORDER
-        params.append(limit)
+            query += " AND status IN ('triage','flagged')"
+            status = None
+        for column, value in (
+            ("status", status),
+            ("hostname", hostname),
+            ("severity", severity),
+            ("rule_id", rule_id),
+            ("scan_id", scan_id),
+        ):
+            if value is not None:
+                query += f" AND {column} = ?"
+                params.append(value)
+        query += """
+            ORDER BY CASE severity
+                WHEN 'critical' THEN 4 WHEN 'high' THEN 3
+                WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC,
+            last_seen_utc DESC, id DESC
+        """
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            params.extend((limit, offset))
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return [_row_to_finding(dict(r)) for r in rows]

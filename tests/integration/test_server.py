@@ -136,7 +136,8 @@ def test_endpoints_open_count_links_active(
     match = re.search(
         r'<tr><td><a href="(?P<href>[^"]+)">VBRSRV01</a></td>'
         r"<td>[^<]*</td><td><code>backup_server</code></td>"
-        r"<td>[^<]*</td><td>[^<]*</td><td>(?P<open>\d+)</td></tr>",
+        r"<td>[^<]*</td><td>[^<]*</td><td>[^<]*</td>"
+        r"<td>[^<]*</td><td>Unknown \(older agent\)</td><td>(?P<open>\d+)</td></tr>",
         page,
     )
     assert match is not None
@@ -621,7 +622,7 @@ def test_summary_zero_is_not_colored(client: TestClient) -> None:
     assert match is not None
     assert "critical" not in match.group(1).split()
     assert "severity=info" not in home
-    assert "Flag does not stick across a later scan." in home
+    assert "Review decisions persist across later scans." in home
     assert 'href="/triage?status=flagged"' in home
 
 

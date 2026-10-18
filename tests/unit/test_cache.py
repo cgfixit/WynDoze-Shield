@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -43,7 +44,7 @@ def test_bundle_suffix_name() -> None:
 
 
 def test_posix_cache_dir_name(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("wyndoze_infoscanoverload.agent.cli.os.name", "posix")
+    monkeypatch.setattr("wyndoze_infoscanoverload.agent.cli.os", SimpleNamespace(name="posix"))
     assert default_cache_dir() == Path("WynDoze-InfoScanOverload-cache")
 
 

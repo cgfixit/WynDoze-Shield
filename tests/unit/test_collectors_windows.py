@@ -33,7 +33,8 @@ def test_oem_display_name_round_trip() -> None:
 def test_software_hive_stops_at_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
 
-    def fake(command: list[str], timeout: int, *, encoding: str = "utf-8") -> str:
+    def fake(command: list[str], timeout: int, *, encoding: str = "utf-8", health=None) -> str:
+        assert health is None
         calls.append(command)
         assert encoding == "oem"
         assert timeout == 5

@@ -79,7 +79,7 @@ def test_upload_ignores_proxy_env(
         text = "{}"
 
         def json(self) -> dict[str, str]:
-            return {"status": "accepted"}
+            return {"status": "accepted", "scan_id": 1, "hostname": clean_report.hostname}
 
     def fake_post(_url: str, **kwargs: object) -> _Resp:
         seen["trust_env"] = kwargs.get("trust_env")

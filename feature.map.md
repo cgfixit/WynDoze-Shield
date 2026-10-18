@@ -12,6 +12,12 @@ Reference for the working tree at version 1.0.0. Behavior below matches the code
 
 Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and `version`.
 
+The source and installed Windows pack are identical v1.2 with 28 rules.
+Windows admin display names retain a bounded `local_admin_sids` mapping;
+the admin policy recognizes account-domain RIDs 500/512, rather than trusting
+an arbitrary qualified account's basename. Windows service posture rules are
+platform-scoped and empty service inventories do not prove a missing service.
+
 ## Server routes
 
 | Route | Auth | Result |
@@ -19,13 +25,27 @@ Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and 
 | `GET /api/health` | none | 200 and `{"status":"ok"}` |
 | `POST /api/scans` | bearer `RECON_INGEST_TOKEN` | 201, or 401, or 413 over 8 MiB, or 422 when the JSON is not a report |
 | `GET /`, `/triage`, `/timeline`, `/endpoints`, `/reports/summary` | basic auth | HTML |
+| `GET /findings/{id}` | basic auth | Complete escaped evidence and matching-scan times, or 404 |
 | `GET /findings/{id}/suppress/confirm` | basic auth | HTML confirm page. Cancel does not write. Confirm posts `suppress`. |
 | `GET /scans/{id}` | basic auth | HTML scan facts, or 404 when the scan is missing or unreadable |
 | `POST /findings/{id}/{action}` | basic auth, and a matching `Origin` when that header is present | 303, 403, or 404 |
 | `GET /export/findings.{fmt}` | basic auth | `csv`, `md`, `json`, or `sentinel` |
 | `/docs`, `/redoc`, `/openapi.json` | none | 404 |
 
-Actions are `flag`, `archive`, `suppress`, and `triage`.
+Actions are `flag`, `archive`, `suppress`, and `triage`. Suppress asks for
+confirmation. Cards group low/info findings unless filtered. Timeline combines
+paginated findings with the 100 most recent public scan summaries; a scan page
+shows at most 500 findings last touched by that scan, with a cap notice.
+
+Finding lists use 50-row pages with stable severity/time/ID ordering. Optional
+`hostname`, `rule_id`, `severity`, `status`, and `page` query parameters filter
+`/triage` and `/timeline`; `host` is a compatible alias for `hostname`.
+`status=active` includes triage and flagged. The inbox defaults to triage.
+Actions retain the current filters and page. `/findings/{id}` requires
+dashboard authentication and shows complete escaped evidence and matching-scan
+times. Invalid filter/page values return 422; absent findings return 404.
+Repeated evidence preserves operator status; changed evidence creates a new row. Authenticated CSV, Markdown, JSON, and
+Sentinel exports include all stored findings and are rendered in memory.
 
 ## Agent environment
 
@@ -49,19 +69,48 @@ Actions are `flag`, `archive`, `suppress`, and `triage`.
 | `RECON_HOST` | `127.0.0.1` | Only `127.0.0.1` or `::1` |
 | `RECON_PORT` | `8000` | Listen port |
 
+Startup creates a missing database parent privately and preserves existing directory
+permissions. Server/development FastAPI floors are 0.143.0.
+
 FastAPI telemetry flags are forced off inside `create_app`. `OTEL_SDK_DISABLED` is set to `true`.
+
+## Desktop and optional mail
+
+The Tk launcher generates per-window credentials and exposes the password as a
+selectable read-only field. Its current-user `WynDoze-InfoScanOverload-scan` task
+collects locally without upload. The separate SYSTEM installer is
+`deploy/windows/Install-ScanneragentTask.ps1`, default task `ScanzAgentDailyScan`.
+It accepts Scanz credential aliases (preferred) or RECON inputs and writes
+canonical `RECON_AGENT_*` keys. Systemd uses those same canonical keys.
+
+`RECON_ALERTS=1` enables SMTP only with `RECON_SMTP_HOST`, `RECON_SMTP_USER`,
+`RECON_SMTP_PASSWORD`, and `RECON_ALERT_TO`. `RECON_SMTP_PORT` defaults to 587
+(STARTTLS); 465 uses TLS. Mail contains hostname and up to 40 finding summaries
+per accepted scan, including repeats. Delivery runs in a worker after the 201
+response and is best-effort, without durable retries. Header/SMTP failures are
+logged without changing the persisted scan. No raw command lines are included.
 
 ## Limits
 
 | Item | Limit |
 |---|---|
-| Ingest body | 8 MiB, then 413 |
+| Ingest body | Authenticate first; count streamed bytes before retaining them; 413 at the first chunk crossing 8 MiB |
 | `scan_time_utc` | 64 characters |
 | Short strings such as `exe` and `display_name` | 512 characters, clipped before the model is built |
 | Process list | 5000 on the model. The agent default `process_limit` is 1000 |
+| Opt-in command line | Patterns: first 800 characters. Encrypted prefix: at most 3000 UTF-8 bytes, ending on a character boundary; Fernet token fits 4096 characters |
 | Software list | The agent default `software_limit` is 2000. The second registry hive is not read after the limit is full |
 | Unknown model keys on platform, service, and software | Dropped |
 | Unknown rule severity | `RuleError` at pack load. Observations still coerce unknown values to `info` |
+
+## Collection health
+
+`collection_health` is optional on the wire (at most six collectors). New agents
+report ok/partial/unavailable/failed, item count, duration_ms, truncated and up to
+eight fixed issue categories. Legacy reports retain unknown coverage. Endpoints
+show collection and receipt times separately; age defaults to 36 hours via
+`RECON_STALE_AFTER_HOURS`. No finding is automatically resolved from missing data.
+Missing-service checks skip explicitly incomplete service inventories.
 
 ## Collectors
 
@@ -69,4 +118,7 @@ Windows software comes from `reg.exe` with `/reg:64` and `/reg:32`, decoded as O
 
 ## Not in this tree
 
-There is no Docker deploy path in this tree. There is no git remote. The scheduled task script is present and was not executed.
+There is no Docker deploy path in this tree. The Windows installer explicitly
+registers a daily SYSTEM task with up to 30 minutes of trigger jitter when an
+operator runs it. Its wrapper returns the agent exit code. Verification uses
+synthetic state and mocked task registration; it does not install a task.

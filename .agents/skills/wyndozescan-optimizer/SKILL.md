@@ -1,57 +1,74 @@
 ---
 name: wyndozescan-optimizer
-description: >
-  Time-boxed read-only scan of WynDoze-InfoScanOverload, then a few draft
-  PRs only when each chunk earns it. Use when asked to optimize
-  WynDoze-InfoScanOverload, audit this scanner, or run /wyndozescan-optimizer.
+description: Inspect WynDoze-Shield for evidence-backed correctness, security, CI, and maintainability fixes, then deliver focused draft PRs when authorized. Use when explicitly asked to run the scanner optimizer or audit this scanner for improvements.
 ---
 
-# WynDoze-InfoScanOverload optimizer
+# Scanner optimizer
 
-You scan this Python package for small, reviewable fixes. The agent collects local metadata. The loopback server scores that metadata with a YAML rule pack and shows a triage inbox.
+Read `AGENTS.md`, `README.md`, `user-guide.md`, and `feature.map.md` first.
+`AGENTS.md` owns the platform and security boundaries. This skill is manual-only.
 
-Read `README.md`, `user-guide.md`, and `feature.map.md` before the first edit. The package version is `__version__` in `src/wyndoze_infoscanoverload/_version.py`.
+## Establish scope
 
-## Scan
+1. Inspect the repository root, remotes, default branch, dirty state, and local-only
+   commits. Fetch the remote and compare open PR heads/files and unmerged branches.
+   Derive the repository owner/name from the remote; use the available `gh` or
+   GitHub connector. Do not invent a remote or hard-code a machine's CLI path.
+2. Use an isolated worktree if the current checkout has unrelated work. Optional
+   `bash .agents/skills/wyndozescan-optimizer/bootstrap.sh` fetches origin and prints
+   a scan seed. With a branch and optional base argument it checks out an existing
+   branch without resetting it, or creates a new branch from that base. Inspect
+   its output before editing; a failed fetch means remote evidence is stale.
+3. Spend about four minutes on an initial read-only sweep, then verify each lead
+   against the actual callers and input-to-effect path. Inspect collectors,
+   command-line sealing, upload/replay, rule validation and both rule packs,
+   ingest limits, authentication, redirects, HTML escaping, finding status,
+   exports, desktop argv/scheduling, opt-in alerts, deployment, and CI.
+4. Drop work already covered upstream. Report only concrete findings, each with
+   a file/line, observed behavior, impact, and focused verification. Zero findings
+   is valid; neither file size nor a target PR count establishes a defect.
 
-Stay read-only until the user picks chunks. About four minutes.
+## Implement and deliver
 
-1. Read the three docs above and `_version.py`.
-2. If `git remote -v` prints a URL, fetch that remote and read the last 20 commits on its default branch. If `git remote -v` is empty, scan this checkout. Do not invent a remote or a GitHub owner.
-3. When a remote exists, list open pull requests with `"C:\Program Files\GitHub CLI\gh.exe" pr list --repo <owner>/<name> --state open --limit 20`. Drop anything an open pull request already covers. On Windows, `gh` on PATH may be the wrong binary.
-4. Sweep `src/wyndoze_infoscanoverload/agent`, `src/wyndoze_infoscanoverload/core`, `src/wyndoze_infoscanoverload/server`, both copies of `windows_default.yaml`, `deploy`, and `tests`.
+Proceed within the user's authorized scope. A review-only request ends with
+findings; an implementation request continues through verification and requested
+publication without another approval ritual.
 
-Return only findings you can point at in the tree. Each one names the file, the evidence, the lens, and small or medium effort. Zero findings is a valid result.
+Keep one concern per draft. Consolidate overlapping edits, or use a dependency
+branch when the user authorizes stacking. Trial-merge overlapping work in a
+separate worktree. Never reset a shared checkout or force-push shared history.
+Use the session's driver prefix for new branches; preserve the head of an existing
+PR when updating it. The repository has `.github/PULL_REQUEST_TEMPLATE.md`;
+apply its relevant sections and identify stale references rather than inventing
+checks for another project.
 
-Lenses are collector correctness, sealed command lines, ingest and list caps, loopback and auth, rule-pack scoring, telemetry, tests, and the deploy scripts. Do not propose file-content scanning, credential collection, or a new rule kind. `feature.map.md` records what this tree does not ship. Do not re-add those items as features.
+Run the changed code with isolated state and synthetic inputs. Use focused tests
+when needed to cover a real boundary; leave full suites and platform matrices to
+hosted CI. Relevant static checks are:
 
-## Chunks
+```bash
+ruff check src tests
+ruff format --check src tests
+mypy src
+mypy --platform win32 src
+python .agents/skills/invariant-guard/check_invariants.py
+bash .agents/skills/invariant-guard/verify.sh  # when the checker changes
+```
 
-Keep one to four chunks. One solid chunk beats four thin ones. A chunk is one concern.
+Lint changed workflows with `actionlint` and inspect their invoked scripts.
+Validate an installed wheel for packaging/rule-pack changes. Windows-only `oem`
+and `os.startfile` need platform-aware handling; macOS/Linux fixtures do not prove
+native Windows behavior. A Python without Tk cannot exercise the launcher.
 
-If two chunks edit the same file, put those edits in one pull request, or cut the later branch from the earlier branch and set the pull request base to that branch. Trial-merge before opening. Merge the parent first.
+Inspect the final diff, stage only intended files, commit, push, and create the
+requested draft using `--body-file` or a structured body. State actual commands,
+revision, evidence class, skipped checks, and residual risks. Read back the PR
+body, remote head, base, reviews, and all checks. Follow the exact pushed head
+through CI. Leave drafts unmerged unless the user explicitly authorizes merging.
 
-Branch prefix is `grok/<slug>` in a Grok session. Cut the first branch from the default branch. This tree has no `.github/PULL_REQUEST_TEMPLATE.md`. Do not invent one during the scan.
-
-## Pull requests
-
-Open a draft only after the user asks for that chunk. Never push `main`. Never force-push.
-
-Title shape is `[prefix] - sentence`. Body headings are Summary, Test evidence, Merge order, and Base. Fill Test evidence with commands you actually ran.
-
-Before that pull request, run the focused pytest for the modules you touched. For a code change, also run `ruff check src tests`, `mypy src`, `mypy --platform win32 src`, and `python3 .claude/skills/invariant-guard/check_invariants.py`. A docs-only chunk does not need mypy. Say what you did not run. `README.md` lists the full local commands. `.github/workflows/ci.yml` runs the invariant checker, the same lint and both mypy passes, and pytest on Ubuntu and Windows with a coverage floor of 80. Claude Code uses `.claude/skills/wyndoze-optimize/` for this workflow.
-
-When a remote exists, create the draft with `"C:\Program Files\GitHub CLI\gh.exe" pr create --draft`. On PowerShell, do not pass an unquoted `#`. When no remote exists, commit on the branch and stop. Do not invent `cgfixit/WynDoze-InfoScanOverload`.
-
-## Do not
-
-- Bind a listener on any host other than `127.0.0.1` or `::1`, or allow an `http` upload to any other host. `server/__main__.py` and `agent/uploader.py` own those checks.
-- Turn on OpenTelemetry or FastAPI telemetry export, or set `docs_url` or `openapi_url` in `create_app`.
-- Read file contents, collect credentials, or store a raw process command line. `--cmdline` stays off unless the Fernet key is set, and `seal_command_lines` runs before the report is written.
-- Raise `_MAX_INGEST_BYTES` or the collector limits to go faster without a measurement.
-- Load a rule pack with `yaml.load`, or call `subprocess` with `shell=True`. Kinds live in `_VALID_KINDS` in `core/rules.py`. Unknown severity stays a `RuleError`.
-- Replace the substring `recon` blindly. Keep `RECON_*` names, the task `ReconAgentDailyScan`, `User=recon`, and the paths `/opt/recon`, `/etc/recon`, and `/var/lib/recon`.
-- Edit `rules/windows_default.yaml` or `src/wyndoze_infoscanoverload/core/rulepacks/windows_default.yaml` alone. Treat the two copies as one pack and update both in the same commit.
-- Run `deploy/windows/Install-ReconAgentTask.ps1`, scan a live workstation for a pull request, or paste inventory, tokens, or bundle bytes into chat or a commit.
-- Add a workflow secret, a new license, or a dependency that sends data off the machine.
-- Add a scan that reads file bytes. Collectors stay metadata only.
+Never scan a live workstation or run the real SYSTEM-task installer for a PR.
+Use `tests/windows/Test-TaskInstaller.ps1` for synthetic task/ACL contracts. Keep
+both rule packs together, preserve `RECON_*` and systemd paths, and preserve the
+installer's documented credential aliases. Do not regenerate `documentation.pdf`
+unless the user requests it. Bounds and security invariants are not optimization
+parameters; update the guard only for an intentional, justified contract change.

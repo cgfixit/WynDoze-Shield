@@ -8,8 +8,10 @@ attacker-controlled telemetry (hostnames, process names, etc.).
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from datetime import UTC, datetime
 from html import escape
 from typing import Any
+from urllib.parse import urlencode
 
 from wyndoze_infoscanoverload.core.rules import Rule
 from wyndoze_infoscanoverload.server.desk import (
@@ -51,6 +53,9 @@ header h1 { margin: 0; font-size: 18px; }
 header .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
 nav { padding: 12px 24px; background: var(--bg); border-bottom: 1px solid var(--border); }
 nav a { color: var(--link); margin-right: 16px; text-decoration: none; font-size: 14px; }
+a { color: var(--link); overflow-wrap: anywhere; }
+a:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+td, li { overflow-wrap: anywhere; }
 nav a:hover { text-decoration: underline; }
 main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
@@ -110,8 +115,8 @@ _FINDING_CAP = 500
 _QUIET_SEVERITIES = frozenset({"low", "info"})
 _SEVERITY_CHIPS = ("critical", "high", "medium", "low", "info")
 _FLAG_NOTE = (
-    "Flag is a mark for this visit. The next scan that sees the same evidence "
-    "puts it back in triage. Archive and Suppress stay in those states."
+    "Flag, Archive, and Suppress persist when the same evidence is seen again. "
+    "Changed evidence creates a new triage finding."
 )
 _MAIN_ACTIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "triage": (("flag", "Flag"), ("archive", "Archive")),
@@ -190,10 +195,7 @@ _STATUS_LINKS = (
     ("archived", "/triage?status=archived", "archived"),
     ("suppressed", "/triage?status=suppressed", "suppressed"),
 )
-_ACTIVE_NOTE = (
-    "Active means triage or flagged. Flag does not stick across a later scan. "
-    "Archive and Suppress do."
-)
+_ACTIVE_NOTE = "Active means triage or flagged. Review decisions persist across later scans."
 
 
 def summary_page(summary: dict[str, Any]) -> str:
@@ -254,19 +256,128 @@ def evidence_label(
     return "Matched pattern"
 
 
+def _display_time(value: str | None) -> str:
+    if not value:
+        return "Unknown"
+    try:
+        timestamp = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    if timestamp.tzinfo is None:
+        return value
+    return timestamp.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _coverage_html(health: dict[str, Any]) -> str:
+    if not health:
+        return "Unknown (older agent)"
+    parts = []
+    names = (
+        "ip_addresses",
+        "processes",
+        "listening_connections",
+        "services",
+        "installed_software",
+        "local_admins",
+    )
+    for name in names:
+        result = health.get(name)
+        if not isinstance(result, dict):
+            parts.append(f"{name}: unknown")
+            continue
+        issues = ", ".join(str(issue) for issue in result.get("issues", []))
+        parts.append(
+            f"{name}: {result.get('status', 'unknown')} "
+            f"({result.get('item_count', 0)} items, {result.get('duration_ms', 0)} ms)"
+            + (f"; {issues}" if issues else "")
+        )
+    incomplete = any(
+        isinstance(result, dict) and (result.get("status") != "ok" or result.get("truncated"))
+        for result in health.values()
+    )
+    label = "Incomplete collection" if incomplete else "Collection reported complete"
+    if not incomplete and len(health) != len(names):
+        label = "Unknown coverage"
+    return (
+        f"<details><summary>{label}</summary><ul>"
+        + "".join(f"<li>{escape(part)}</li>" for part in parts)
+        + "</ul></details>"
+    )
+
+
+def _filters_form(filters: dict[str, str | None], path: str) -> str:
+    fields = []
+    for key, label in (("hostname", "Host (exact)"), ("rule_id", "Rule ID (exact)")):
+        fields.append(
+            f"<label>{label} <input name='{key}' value='{escape(filters.get(key) or '')}'></label> "
+        )
+    for key, values in (
+        ("status", ("active", "triage", "flagged", "archived", "suppressed")),
+        ("severity", ("critical", "high", "medium", "low", "info")),
+    ):
+        options = (
+            "<option value=''>All</option>" if path == "/timeline" or key == "severity" else ""
+        ) + "".join(
+            f"<option value='{value}'"
+            + (" selected" if filters.get(key) == value else "")
+            + f">{value}</option>"
+            for value in values
+        )
+        fields.append(f"<label>{key.title()} <select name='{key}'>{options}</select></label> ")
+    return (
+        f"<form method='get' action='{escape(path)}'>"
+        + "".join(fields)
+        + f"<button type='submit'>Filter</button> <a href='{escape(path)}'>Clear filters</a></form>"
+    )
+
+
+def _list_path(path: str, filters: dict[str, str | None], page_number: int) -> str:
+    query = {key: value for key, value in filters.items() if value}
+    if page_number > 1:
+        query["page"] = str(page_number)
+    return path + ("?" + urlencode(query) if query else "")
+
+
+def _finding_navigation(
+    path: str,
+    filters: dict[str, str | None],
+    page_number: int,
+    *,
+    has_next: bool,
+) -> str:
+    links = []
+    for label, number in (("Previous", page_number - 1), ("Next", page_number + 1)):
+        if number < 1 or (label == "Next" and not has_next):
+            continue
+        links.append(f"<a href='{escape(_list_path(path, filters, number))}'>{label}</a>")
+    return f"<p>Page {page_number} &middot; " + " &middot; ".join(links) + "</p>"
+
+
 def triage_page(
     findings: list[dict[str, Any]],
     query: DeskQuery,
     endpoints: list[dict[str, Any]],
     cmdline_rules: Mapping[str, frozenset[str]],
+    *,
+    filters: dict[str, str | None] | None = None,
+    page_number: int = 1,
+    has_next: bool = False,
 ) -> str:
     """Render the triage desk as one card per finding."""
+    filters = filters or {
+        "status": query.status,
+        "hostname": query.host,
+        "severity": query.severity,
+        "rule_id": query.rule_id,
+    }
+    next_path = _list_path("/triage", filters, page_number)
     body = (
         "<h2>Triage Inbox</h2>"
+        f"{_filters_form(filters, '/triage')}"
         f"{_filter_row(query, endpoints)}"
         f'<p class="muted">{escape(_FLAG_NOTE)}</p>'
-        f"{_cap_note(findings)}"
-        f"{_finding_stack(findings, query, cmdline_rules)}"
+        f"{_finding_navigation('/triage', filters, page_number, has_next=has_next)}"
+        f"{_finding_stack(findings, query, cmdline_rules, return_path=next_path)}"
     )
     return page("WynDoze-InfoScanOverload Triage Inbox", body, current="/triage")
 
@@ -287,8 +398,8 @@ def _finding_stack(
 ) -> str:
     """Render cards. Low and info stay closed unless that severity is the filter."""
     if not findings:
-        if return_path is not None:
-            return ""
+        if return_path is not None and return_path.startswith("/timeline"):
+            return "<p class='muted'>No findings match these filters.</p>"
         return (
             '<p class="muted">No findings for this filter.</p>'
             '<p><a href="/triage">Clear the filter</a></p>'
@@ -342,7 +453,7 @@ def _filter_chip(
     current: bool,
 ) -> str:
     """Render one filter link."""
-    encoded = encode_desk_query(query.status, severity, host)
+    encoded = encode_desk_query(query.status, severity, host, rule_id=query.rule_id)
     href = "/triage" if not encoded else f"/triage?{encoded}"
     mark = ' aria-current="true"' if current else ""
     return f'<a href="{escape(href)}"{mark}>{escape(label)}</a>'
@@ -363,9 +474,12 @@ def _finding_card(
     list_html = "".join(f"<li>{escape(display_evidence(item))}</li>" for item in items)
     return (
         f'<article class="finding" data-severity="{severity}">'
-        f"<h3>{escape(str(finding.get('title') or ''))}</h3>"
+        f"<h3><a href='/findings/{int(finding.get('id') or 0)}'>"
+        f"{escape(str(finding.get('title') or ''))}</a></h3>"
         f"<p>{_host_html(query, str(finding.get('hostname') or ''))}</p>"
         f"<p>{escape(str(finding.get('message') or ''))}</p>"
+        f"<p>{_severity_badge(str(finding.get('severity') or 'info'))} "
+        f"<code>{escape(str(finding.get('status') or ''))}</code></p>"
         f"<p>{_identity_line(finding)}</p>"
         f"<p>{_seen_line(finding)}</p>"
         f"<h4>{escape(label)}</h4>"
@@ -471,17 +585,62 @@ def _action_form(finding_id: int, verb: str, label: str, next_path: str) -> str:
     )
 
 
-def timeline_page(scans: list[dict[str, Any]]) -> str:
-    """Render recent scans as text rows that link to the scan page."""
-    if not scans:
-        stack = "<p class='muted'>No scans.</p>"
-    else:
-        stack = "".join(_scan_block(scan) for scan in scans)
-    return page(
-        "WynDoze-InfoScanOverload Timeline",
-        f"<h2>Timeline</h2>{stack}",
-        current="/timeline",
+def timeline_page(
+    scans: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    cmdline_rules: Mapping[str, frozenset[str]],
+    *,
+    filters: dict[str, str | None],
+    page_number: int = 1,
+    has_next: bool = False,
+) -> str:
+    """Render paginated findings alongside redacted recent scan summaries."""
+    scans_html = "".join(_scan_block(scan) for scan in scans) or "<p>No scans yet.</p>"
+    query = DeskQuery(
+        filters.get("status") or "",
+        filters.get("severity"),
+        filters.get("hostname"),
+        filters.get("rule_id"),
     )
+    next_path = _list_path("/timeline", filters, page_number)
+    body = (
+        "<h2>Timeline</h2>"
+        f"<details><summary>Recent scans ({len(scans)})</summary>{scans_html}</details>"
+        f"{_filters_form(filters, '/timeline')}"
+        f"{_finding_navigation('/timeline', filters, page_number, has_next=has_next)}"
+        "<p>Exports include all stored findings, regardless of these filters. "
+        "<a href='/reports/summary'>Export reports</a></p>"
+        f"{_finding_stack(findings, query, cmdline_rules, return_path=next_path)}"
+    )
+    return page("WynDoze-InfoScanOverload Timeline", body, current="/timeline")
+
+
+def finding_detail(
+    finding: dict[str, Any],
+    scan: dict[str, Any] | None,
+    cmdline_rules: Mapping[str, frozenset[str]],
+) -> str:
+    """Display complete escaped evidence and matching observation times."""
+    query = DeskQuery("triage", None, None)
+    body = "<h2>Finding details</h2>" + _finding_card(
+        finding,
+        next_path="/timeline",
+        query=query,
+        cmdline_rules=cmdline_rules,
+    )
+    for label, value in (
+        ("Rule ID", finding.get("rule_id")),
+        ("First seen", finding.get("first_seen_utc")),
+        ("Last seen", finding.get("last_seen_utc")),
+        ("Occurrences", finding.get("seen_count")),
+        ("Latest matching scan", finding.get("scan_id")),
+        ("Collected", scan.get("scan_time_utc") if scan else None),
+        ("Received", scan.get("received_at_utc") if scan else None),
+    ):
+        body += f"<p><strong>{label}:</strong> {escape(str(value or 'Unknown'))}</p>"
+    body += "<p>Times describe matching observations, not proof of resolution. "
+    body += "<a href='/timeline'>Back to findings</a></p>"
+    return page("Finding details", body, current="/triage")
 
 
 def _scan_block(scan: dict[str, Any]) -> str:
@@ -525,9 +684,7 @@ def scan_page(
     """Render redacted scan facts and the findings this scan last touched."""
     query = DeskQuery(status="triage", severity=None, host=None)
     cards = _finding_stack(findings, query, cmdline_rules, return_path=next_path)
-    body = (
-        f"<h2>Scan</h2>{_scan_facts(facts)}<p>Findings were last updated by this scan.</p>{cards}"
-    )
+    body = f"<h2>Scan</h2>{_scan_facts(facts)}<p>Findings were last updated by this scan.</p>{_cap_note(findings)}{cards}"
     return page("WynDoze-InfoScanOverload Scan", body, current="/timeline")
 
 
@@ -593,8 +750,11 @@ def _endpoint_row(endpoint: Mapping[str, Any], open_counts: Mapping[str, int]) -
         f"<td>{_endpoint_name(hostname)}</td>"
         f"<td>{escape(str(endpoint.get('fqdn') or ''))}</td>"
         f"<td><code>{escape(str(endpoint.get('role') or 'unknown'))}</code></td>"
-        f"<td>{escape(str(endpoint.get('first_seen_utc') or ''))}</td>"
-        f"<td>{escape(str(endpoint.get('last_seen_utc') or ''))}</td>"
+        f"<td>{escape(_display_time(endpoint.get('first_seen_utc')))}</td>"
+        f"<td>{escape(_display_time(endpoint.get('scan_time_utc')))}</td>"
+        f"<td>{escape(_display_time(endpoint.get('last_seen_utc')))}</td>"
+        f"<td>{escape(str(endpoint.get('freshness', 'unknown')))}</td>"
+        f"<td>{_coverage_html(endpoint.get('collection_health', {}))}</td>"
         f"<td>{open_count}</td>"
         "</tr>"
     )
@@ -613,9 +773,13 @@ def endpoints_table(
         )
     rows = "".join(_endpoint_row(endpoint, open_counts) for endpoint in endpoints)
     body = (
-        "<h2>Endpoints</h2><table><thead><tr>"
+        "<h2>Endpoints</h2>"
+        "<p>Coverage describes reported collection, not a security verdict. "
+        "Replaying an old bundle updates receipt time without refreshing its inventory age.</p>"
+        "<table><thead><tr>"
         "<th>Hostname</th><th>FQDN</th><th>Role</th>"
-        "<th>First Seen</th><th>Last Seen</th><th>Open</th>"
+        "<th>First received</th><th>Collected</th><th>Received</th>"
+        "<th>Freshness</th><th>Collection coverage</th><th>Open</th>"
         "</tr></thead><tbody>"
         f"{rows}</tbody></table>"
     )
@@ -670,6 +834,7 @@ __all__ = [
     "display_evidence",
     "endpoints_table",
     "evidence_label",
+    "finding_detail",
     "page",
     "reports_page",
     "safe_technique_href",

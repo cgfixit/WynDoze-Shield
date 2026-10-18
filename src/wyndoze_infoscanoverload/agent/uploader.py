@@ -17,6 +17,7 @@ from wyndoze_infoscanoverload.core.models import ScanReport
 
 logger = logging.getLogger("wyndoze_infoscanoverload.agent.uploader")
 
+_HTTP_CREATED = 201
 _HTTP_BAD_REQUEST = 400
 _NON_RETRYABLE = frozenset({400, 401, 403, 422})
 _LOOPBACK_HTTP = frozenset({"127.0.0.1", "::1"})
@@ -76,10 +77,11 @@ def upload_report(
             last_exc = exc
             logger.warning("Upload attempt %d/%d failed: %s", attempt, max_attempts, exc)
         else:
-            if response.status_code < _HTTP_BAD_REQUEST:
+            if response.status_code == _HTTP_CREATED:
+                result = _parse_acknowledgement(response, report.hostname)
                 logger.info("Upload successful (HTTP %d)", response.status_code)
-                return _parse_json(response)
-            if response.status_code in _NON_RETRYABLE:
+                return result
+            if response.status_code < _HTTP_BAD_REQUEST or response.status_code in _NON_RETRYABLE:
                 # Non-retryable: bad token or bad payload.
                 msg = f"Upload rejected: HTTP {response.status_code} | {response.text[:500]}"
                 raise UploadError(msg)
@@ -96,12 +98,22 @@ def upload_report(
     raise UploadError(msg)
 
 
-def _parse_json(response: httpx.Response) -> dict[str, object]:
+def _parse_acknowledgement(response: httpx.Response, hostname: str) -> dict[str, object]:
     try:
         data = response.json()
-    except ValueError:
-        return {"status": "ok", "raw": response.text[:300]}
-    return data if isinstance(data, dict) else {"status": "ok", "data": data}
+    except ValueError as exc:
+        msg = "Upload response is not a valid ingest acknowledgement"
+        raise UploadError(msg) from exc
+    if (
+        not isinstance(data, dict)
+        or data.get("status") != "accepted"
+        or type(data.get("scan_id")) is not int
+        or data["scan_id"] <= 0
+        or data.get("hostname") != hostname
+    ):
+        msg = "Upload response is not a valid ingest acknowledgement"
+        raise UploadError(msg)
+    return data
 
 
 __all__ = ["UploadError", "assert_upload_url", "upload_report"]

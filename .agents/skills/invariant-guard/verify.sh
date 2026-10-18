@@ -47,6 +47,9 @@ plant "$pkg/core/rules.py" 's/"cmdline_flag",/"cmdline_flag",\n        "file_has
 # H. Raise the ingest cap (C2).
 plant "$pkg/server/app.py" 's/_MAX_INGEST_BYTES = 8 \* 1024 \* 1024/_MAX_INGEST_BYTES = 64 * 1024 * 1024/' '64 \* 1024'
 
+# I. Raise the sealed UTF-8 byte cap (C2).
+plant "$pkg/agent/cmdline.py" 's/_PLAIN_MAX_BYTES = 3000/_PLAIN_MAX_BYTES = 6000/' '_PLAIN_MAX_BYTES = 6000'
+
 out="$(python3 "$checker" --repo-root "$tmp" 2>&1)"
 rc=$?
 if [ "$rc" -ne 2 ]; then
@@ -65,6 +68,7 @@ expect=(
   "FAIL R1 rules/ and core/rulepacks/"
   "FAIL R2 _VALID_KINDS"
   "FAIL C2 server/app.py _MAX_INGEST_BYTES"
+  "FAIL C2 agent/cmdline.py _PLAIN_MAX_BYTES"
 )
 for line in "${expect[@]}"; do
   echo "$out" | grep -qF -- "$line" || { echo "mutation test: not detected: $line" >&2; echo "$out" >&2; exit 1; }

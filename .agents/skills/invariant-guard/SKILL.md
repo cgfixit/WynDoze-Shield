@@ -1,20 +1,20 @@
 ---
 name: invariant-guard
-description: Assert WynDoze-InfoScanOverload's design invariants still hold (loopback-only bind and upload, no docs routes or telemetry, strict CSP, safe YAML, no shell, module isolation, metadata-only collectors, pinned caps, twin rule pack, closed rule kinds, recon deploy names, dependency fence) against the current tree. Use before merging any change to src/, rules/, deploy/, or pyproject.toml, when asked to "check invariants", or as the first gate of a security review.
+description: Assert WynDoze-InfoScanOverload's design invariants still hold (loopback-only bind and upload, no docs routes or telemetry, strict CSP, safe YAML, no shell, module isolation, metadata-only collectors, pinned caps, twin rule pack, closed rule kinds, deployment names, dependency fence) against the current tree. Use before merging any change to src/, rules/, deploy/, or pyproject.toml, when asked to "check invariants", or as the first gate of a security review.
 ---
 
 # Invariant Guard
 
 **Job:** answer one question: *do this tree's invariants still hold after the change?* Style, speed, and coverage belong to other gates (ruff, mypy, pytest). The checker covers what it can see. Your reading of the diff covers the rest.
 
-**Why it exists:** the invariants in `CLAUDE.md` ("Constraints to preserve") live in constants, keyword arguments, and import edges spread across `server/`, `agent/`, `core/`, `rules/`, and `deploy/`. Unit tests check behavior one function at a time, so they miss a quiet edit such as `docs_url="/docs"`, a third host in `_LOOPBACK_HOSTS`, or one rule-pack copy drifting from the other.
+**Why it exists:** the invariants in `AGENTS.md` ("Boundaries to preserve") live in constants, keyword arguments, and import edges spread across `server/`, `agent/`, `core/`, `rules/`, and `deploy/`. Unit tests check behavior one function at a time, so they miss a quiet edit such as `docs_url="/docs"`, a third host in `_LOOPBACK_HOSTS`, or one rule-pack copy drifting from the other.
 
 ## Run
 
 ### Step 1: deterministic checker (stdlib only, under a second)
 
 ```bash
-python3 .claude/skills/invariant-guard/check_invariants.py
+python3 .agents/skills/invariant-guard/check_invariants.py
 ```
 
 It parses source with `ast` and never imports project code, so it runs before `pip install`. CI runs it as the `invariants` job. Exit codes: `0` all pass, `2` an invariant is violated, `3` wrong root or an unparseable file.
@@ -31,10 +31,10 @@ It parses source with `ast` and never imports project code, so it runs before `p
 | S3 | No code loading | no `pickle`/`marshal`/`shelve`/`dill` import, no `eval`/`exec` |
 | M1 | Module isolation | `core/` imports none of `agent`, `server`, `desktop`, `alerts`; `agent/` imports none of `server`, `desktop`, `alerts`; `server/` imports none of `agent`, `desktop` |
 | C1 | Metadata only | `agent/collectors.py` calls no `open`, `read_text`, `read_bytes`, `iterdir`, `glob`, or `rglob` |
-| C2 | Pinned caps | `_MAX_INGEST_BYTES == 8 MiB`, `_MAX_ACTION_BODY == 2048`, `_PLAIN_MAX == 800` |
+| C2 | Pinned caps | `_MAX_INGEST_BYTES == 8 MiB`, `_MAX_ACTION_BODY == 2048`, `_PLAIN_MAX == 800`, `_PLAIN_MAX_BYTES == 3000` |
 | R1 | Twin rule pack | `rules/windows_default.yaml` equals `core/rulepacks/windows_default.yaml` (line endings normalized) |
 | R2 | Closed rule kinds | `core/rules._VALID_KINDS` is exactly the seven documented kinds |
-| D1 | Recon names | the systemd unit keeps `User=recon` and `/opt/recon/`; the Windows script keeps `"ReconAgentDailyScan"` |
+| D1 | Deployment names | the systemd unit keeps `User=recon` and `/opt/recon/`; the Windows script keeps `"ScanzAgentDailyScan"` |
 | P1 | Dependency fence | every base and extra dependency in `pyproject.toml` is in `ALLOWED_DEPS` |
 
 ### Step 2: read the failures
@@ -48,10 +48,10 @@ A `FAIL` line names the check and shows what it found. There are three cases.
 ### Step 3: prove the checker still bites (after editing it)
 
 ```bash
-bash .claude/skills/invariant-guard/verify.sh
+bash .agents/skills/invariant-guard/verify.sh
 ```
 
-This passes the clean tree, then plants nine violations in a temp copy and requires exit `2` with each `FAIL` line. It also requires a wrong root to exit `3`. Run it whenever `check_invariants.py` changes. A checker that cannot go red proves nothing.
+This passes the clean tree, then plants ten violations in a temp copy and requires exit `2` with each `FAIL` line. It also requires a wrong root to exit `3`. Run it whenever `check_invariants.py` changes. A checker that cannot go red proves nothing.
 
 ### Step 4: what the checker cannot see (read the diff)
 
@@ -59,7 +59,7 @@ This passes the clean tree, then plants nine violations in a temp copy and requi
 - **HTML escaping.** Every dynamic value in `server/templates.py` goes through `html.escape`. `tests/unit/test_templates_safe.py` guards it.
 - **Redirect allowlist.** New `next=` targets belong in `server/desk.safe_next`.
 - **Origin check.** `POST /findings/{id}/{action}` keeps `_reject_foreign_origin`.
-- **Upsert status rule.** Re-ingest resets status to `triage` unless it is `archived` or `suppressed` (`server/storage.py`).
+- **Upsert status rule.** Re-ingest preserves the operator status for identical evidence; changed evidence starts in `triage` (`server/storage.py`).
 - **Collector reach.** New collectors read names, ports, and account names only. No file bytes, credentials, or network scans.
 
 ## Gotchas

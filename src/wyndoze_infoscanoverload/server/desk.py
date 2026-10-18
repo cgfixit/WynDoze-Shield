@@ -13,6 +13,8 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 _DEFAULT_NEXT = "/triage"
 _HOST_MAX = 255
+_RULE_MAX = 512
+_PAGE_MAX = 1000000
 _ASCII_DELETE = 127
 _CONTROL_BELOW = 32
 _STATUSES = frozenset({"triage", "flagged", "archived", "suppressed", "active"})
@@ -44,6 +46,7 @@ class DeskQuery:
     status: str
     severity: str | None
     host: str | None
+    rule_id: str | None = None
 
 
 def parse_desk_query(source: Mapping[str, str]) -> DeskQuery:
@@ -61,6 +64,8 @@ def encode_desk_query(
     status: str | None,
     severity: str | None,
     host: str | None,
+    *,
+    rule_id: str | None = None,
 ) -> str:
     """Rebuild a desk query. Empty means the path has no query string."""
     pairs: list[tuple[str, str]] = []
@@ -70,6 +75,8 @@ def encode_desk_query(
         pairs.append(("severity", severity))
     if legal_host(host):
         pairs.append(("host", host))
+    if rule_id:
+        pairs.append(("rule_id", rule_id))
     if not pairs:
         return ""
     return urlencode(pairs, quote_via=quote)
@@ -77,7 +84,7 @@ def encode_desk_query(
 
 def desk_path(query: DeskQuery) -> str:
     """Return the current desk URL, including a default status."""
-    encoded = encode_desk_query(query.status, query.severity, query.host)
+    encoded = encode_desk_query(query.status, query.severity, query.host, rule_id=query.rule_id)
     if not encoded:
         return _DEFAULT_NEXT
     return f"{_DEFAULT_NEXT}?{encoded}"
@@ -93,7 +100,7 @@ def host_href(query: DeskQuery, hostname: str) -> str | None:
     """Return a desk link for one host, or None when the name is not legal."""
     if not legal_host(hostname):
         return None
-    encoded = encode_desk_query(query.status, query.severity, hostname)
+    encoded = encode_desk_query(query.status, query.severity, hostname, rule_id=query.rule_id)
     return f"{_DEFAULT_NEXT}?{encoded}"
 
 
@@ -117,7 +124,31 @@ def _rebuild_next(value: object) -> str | None:
     if _has_repeat(pairs):
         return None
     status, severity, host = _take_desk_values(pairs)
-    encoded = encode_desk_query(status, severity, host)
+    present = dict(pairs)
+    extras = []
+    hostname = present.get("hostname")
+    if legal_host(hostname):
+        extras.append(("hostname", hostname))
+    rule_id = present.get("rule_id", "")
+    if (
+        rule_id
+        and len(rule_id) <= _RULE_MAX
+        and not any(ord(char) < _CONTROL_BELOW or ord(char) == _ASCII_DELETE for char in rule_id)
+    ):
+        extras.append(("rule_id", rule_id))
+    page_number = present.get("page", "")
+    if (
+        page_number.isascii()
+        and page_number.isdecimal()
+        and len(page_number) <= len(str(_PAGE_MAX))
+        and 1 <= int(page_number) <= _PAGE_MAX
+    ):
+        extras.append(("page", str(int(page_number))))
+    encoded = "&".join(
+        part
+        for part in (encode_desk_query(status, severity, host), urlencode(extras, quote_via=quote))
+        if part
+    )
     if not encoded:
         return path
     return f"{path}?{encoded}"

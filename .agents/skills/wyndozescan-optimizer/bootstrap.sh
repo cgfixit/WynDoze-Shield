@@ -16,7 +16,7 @@
 # commit.
 #
 # Usage:
-#   bash .claude/skills/wyndoze-optimize/bootstrap.sh [work-branch [base-ref]]
+#   bash .agents/skills/wyndozescan-optimizer/bootstrap.sh [work-branch [base-ref]]
 
 set -euo pipefail
 
@@ -74,7 +74,7 @@ done < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin)
 echo
 echo "## File counts by area"
 for d in "$PKG/agent" "$PKG/core" "$PKG/server" "$PKG/desktop.py" "$PKG/alerts.py" \
-         rules deploy tests/unit tests/integration .github .claude .agents; do
+         rules deploy tests/unit tests/integration .github .agents; do
   if [ -d "$d" ]; then
     printf '  %-40s %s files\n' "$d/" "$(find "$d" -type f -not -path '*/__pycache__/*' | wc -l | tr -d ' ')"
   elif [ -f "$d" ]; then
@@ -99,8 +99,8 @@ done
 
 echo
 echo "## Invariant checker (stdlib, no install)"
-if [ -f .claude/skills/invariant-guard/check_invariants.py ]; then
-  python3 .claude/skills/invariant-guard/check_invariants.py | grep -E 'FAIL|passed' | sed 's/^/  /' || true
+if [ -f .agents/skills/invariant-guard/check_invariants.py ]; then
+  python3 .agents/skills/invariant-guard/check_invariants.py | grep -E 'FAIL|passed' | sed 's/^/  /' || true
 else
   echo "  (invariant-guard not on this branch)"
 fi
@@ -110,4 +110,4 @@ echo "## Recent commits on main (do not redo landed work)"
 git log origin/main --oneline -n 12 2>/dev/null | sed 's/^/  /'
 
 hr
-echo "Next: run the PR dedup MCP step, then dispatch the read-only scan (SKILL.md Step 1-2)."
+echo "Next: compare open PRs and remote branches, then read the affected code (SKILL.md)."

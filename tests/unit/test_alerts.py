@@ -77,3 +77,16 @@ def test_notify_swallows_smtp_errors(monkeypatch: pytest.MonkeyPatch) -> None:
         side_effect=smtplib.SMTPException("down"),
     ):
         notify_findings("HOST1", [("high", "rule", "Title")])
+
+
+@pytest.mark.parametrize("hostname", ["bad\r\nBcc: someone@example.test", "bad\nhost"])
+def test_header_errors_do_not_escape_notification(monkeypatch, caplog, hostname):
+    settings = AlertSettings(
+        "smtp.example.test", 587, "scan@example.test", "ops@example.test", "synthetic"
+    )
+    monkeypatch.setattr("wyndoze_infoscanoverload.alerts.settings_from_env", lambda: settings)
+    with patch("wyndoze_infoscanoverload.alerts.smtplib.SMTP") as smtp:
+        notify_findings(hostname, [("high", "rule", "Title")])
+        smtp.assert_not_called()
+    assert "alert send failed: ValueError" in caplog.text
+    assert hostname not in caplog.text

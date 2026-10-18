@@ -21,6 +21,7 @@ from wyndoze_infoscanoverload.desktop import (
     server_env,
     status_from_server_log,
     task_command,
+    tool_path,
     wait_until_healthy,
 )
 
@@ -158,3 +159,26 @@ def test_server_env_omits_mail_unless_requested() -> None:
     alerted = server_env(token="tok", password="pw", port="8765", alerts=mail)  # noqa: S106
     assert alerted["RECON_ALERTS"] == "1"
     assert alerted["RECON_SMTP_PASSWORD"] == mail.password
+
+
+@pytest.mark.parametrize("port", [0, -1, 65536, 70000])
+def test_alert_mail_rejects_out_of_range_ports(port):
+    with pytest.raises(ValueError, match="between 1 and 65535"):
+        AlertMail("smtp.example.test", port, "u", "p", "to@example.test")
+
+
+@pytest.mark.parametrize("port", [1, 587, 465, 65535])
+def test_alert_mail_accepts_valid_ports(port):
+    assert AlertMail("smtp.example.test", port, "u", "p", "to@example.test").port == port
+
+
+def test_tool_path_stays_with_the_virtual_environment(tmp_path, monkeypatch):
+    scripts = tmp_path / "venv" / "bin"
+    scripts.mkdir(parents=True)
+    executable = scripts / "python"
+    # Model resolution to the base interpreter without requiring Windows symlink privileges.
+    monkeypatch.setattr("wyndoze_infoscanoverload.desktop.sys.executable", str(executable))
+    monkeypatch.setattr(Path, "resolve", lambda _self: tmp_path / "base" / "python")
+    tool = scripts / "WynDoze-InfoScanOverload-server.exe"
+    tool.touch()
+    assert tool_path("WynDoze-InfoScanOverload-server") == tool

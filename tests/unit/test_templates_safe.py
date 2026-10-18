@@ -82,16 +82,28 @@ def test_low_and_info_collapse_unless_filtered() -> None:
         assert "Note" in shown
 
 
-def test_cap_and_empty_copy() -> None:
+def test_paginated_inbox_and_scan_cap_notice() -> None:
     query = DeskQuery("triage", None, None)
     empty = templates.triage_page([], query, [], {})
     assert "No findings for this filter." in empty
-    capped = [_card("high", f"T{index}", finding_id=index + 1) for index in range(500)]
-    page = templates.triage_page(capped, query, [], {})
-    assert "The 500-finding cap was hit." in page
-    assert page.count('class="finding"') == 500
-    below = templates.triage_page(capped[:499], query, [], {})
-    assert "cap was hit" not in below
+    findings = [_card("high", f"T{index}", finding_id=index + 1) for index in range(500)]
+    page = templates.triage_page(findings[:50], query, [], {}, has_next=True)
+    assert "Page 1" in page
+    assert ">Next</a>" in page
+    assert "cap was hit" not in page
+    assert page.count('class="finding"') == 50
+    scan = templates.scan_page({}, findings, "/scans/1", {})
+    assert "The 500-finding cap was hit." in scan
+    assert scan.count('class="finding"') == 500
+
+
+def test_detail_keeps_sealed_evidence_hidden() -> None:
+    finding = _card("high", "Title")
+    finding["evidence"] = [_TOKEN, "<script>" + "X" * 400 + "</script>"]
+    page = templates.finding_detail(finding, None, {})
+    assert _TOKEN not in page
+    assert "Sealed value. Not shown." in page
+    assert "&lt;script&gt;" + "X" * 400 + "&lt;/script&gt;" in page
 
 
 def test_evidence_label_requires_cmdline_rule() -> None:

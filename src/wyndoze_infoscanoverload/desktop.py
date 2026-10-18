@@ -41,6 +41,7 @@ ROLES = (
 CADENCES = ("daily", "weekly", "monthly")
 TASK_NAME = "WynDoze-InfoScanOverload-scan"
 _SCHEDULE_TIME = "02:30"
+_MAX_SMTP_PORT = 65535
 
 
 def project_root() -> Path:
@@ -54,7 +55,8 @@ def project_root() -> Path:
 
 def tool_path(name: str) -> Path:
     """Return the venv console script next to the running interpreter."""
-    scripts = Path(sys.executable).resolve().parent
+    # Resolving the interpreter symlink escapes a virtual environment.
+    scripts = Path(sys.executable).parent
     windows = scripts / f"{name}.exe"
     if windows.is_file():
         return windows
@@ -246,6 +248,11 @@ class AlertMail:
     password: str
     recipient: str
 
+    def __post_init__(self) -> None:
+        if not 1 <= self.port <= _MAX_SMTP_PORT:
+            msg = "SMTP port must be between 1 and 65535."
+            raise ValueError(msg)
+
 
 def wait_until_healthy(
     port: str,
@@ -320,17 +327,16 @@ def main() -> None:  # noqa: C901, PLR0915 - one window, one place
         mail: AlertMail | None = None
         if alerts_on.get():
             try:
-                port_num = int(smtp_port.get().strip())
+                mail = AlertMail(
+                    host=smtp_host.get().strip(),
+                    port=int(smtp_port.get().strip()),
+                    username=smtp_user.get().strip(),
+                    password=smtp_password.get(),
+                    recipient=smtp_to.get().strip(),
+                )
             except ValueError:
-                set_status("SMTP port must be an integer.")
+                set_status("SMTP port must be an integer from 1 to 65535.")
                 return
-            mail = AlertMail(
-                host=smtp_host.get().strip(),
-                port=port_num,
-                username=smtp_user.get().strip(),
-                password=smtp_password.get(),
-                recipient=smtp_to.get().strip(),
-            )
             if not mail.host or not mail.username or not mail.password or not mail.recipient:
                 set_status("Email alerts need host, username, password, and recipient.")
                 return

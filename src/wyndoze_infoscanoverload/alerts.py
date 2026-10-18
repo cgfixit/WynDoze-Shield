@@ -90,7 +90,7 @@ def notify_findings(hostname: str, rows: list[tuple[str, str, str]]) -> None:
     body = f"Host {hostname}\n" + ("\n".join(lines) if lines else "No findings.")
     try:
         send_alert(settings, f"WynDoze-InfoScanOverload {hostname}", body)
-    except (smtplib.SMTPException, OSError) as exc:
+    except (smtplib.SMTPException, OSError, ValueError) as exc:
         logger.warning("alert send failed: %s", type(exc).__name__)
 
 

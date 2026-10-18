@@ -19,7 +19,7 @@ import secrets
 from typing import Annotated
 from urllib.parse import parse_qsl, urlparse
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.telemetry import TelemetryConfig
@@ -27,12 +27,13 @@ from pydantic import ValidationError
 
 from wyndoze_infoscanoverload._version import __version__
 from wyndoze_infoscanoverload.alerts import notify_findings
-from wyndoze_infoscanoverload.core.models import Finding, ScanReport
+from wyndoze_infoscanoverload.core.models import Finding, FindingStatus, ScanReport
 from wyndoze_infoscanoverload.core.rulepacks import default_rule_pack
 from wyndoze_infoscanoverload.core.rules import RulePack, evaluate, load_rule_pack
+from wyndoze_infoscanoverload.core.severity import Severity
 from wyndoze_infoscanoverload.server import templates
 from wyndoze_infoscanoverload.server.config import ServerConfig
-from wyndoze_infoscanoverload.server.desk import parse_desk_query, safe_next
+from wyndoze_infoscanoverload.server.desk import DeskQuery, safe_next
 from wyndoze_infoscanoverload.server.exports import EXPORTERS
 from wyndoze_infoscanoverload.server.present import UnreadableScan, public_scan_facts
 from wyndoze_infoscanoverload.server.storage import Storage
@@ -168,11 +169,13 @@ async def _posted_next(request: Request) -> str | None:
     A body longer than 2048 bytes is rejected before any status write.
     The body is not logged.
     """
-    body = await request.body()
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > _MAX_ACTION_BODY:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="body too large")
+        body.extend(chunk)
     if not body:
         return None
-    if len(body) > _MAX_ACTION_BODY:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="body too large")
     if not _is_form_body(request.headers.get("content-type")):
         return None
     try:
@@ -226,12 +229,15 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901, PLR0915 - cohesive ro
     @app.post("/api/scans", status_code=status.HTTP_201_CREATED)
     async def ingest_scan(
         request: Request,
+        background_tasks: BackgroundTasks,
         authorization: Annotated[str | None, Header()] = None,
     ) -> dict[str, object]:
         _require_ingest_token(app, authorization)
-        body = await request.body()
-        if len(body) > _MAX_INGEST_BYTES:
-            raise HTTPException(status_code=413, detail="ingest body exceeds 8 MiB")
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > _MAX_INGEST_BYTES:
+                raise HTTPException(status_code=413, detail="ingest body exceeds 8 MiB")
+            body.extend(chunk)
         try:
             report = ScanReport.model_validate_json(body)
         except ValidationError as exc:
@@ -240,7 +246,8 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901, PLR0915 - cohesive ro
         pack: RulePack = app.state.rule_pack
         findings: list[Finding] = evaluate(report, pack)
         scan_id = storage.record_scan(report, findings)
-        notify_findings(
+        background_tasks.add_task(
+            notify_findings,
             report.hostname,
             [(item.severity.value, item.rule_id, item.title) for item in findings],
         )
@@ -261,20 +268,88 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901, PLR0915 - cohesive ro
         return _html(templates.summary_page(app.state.storage.summary()))
 
     @app.get("/triage", response_class=HTMLResponse)
-    def triage_inbox(request: Request, _: None = DashAuth) -> HTMLResponse:
-        query = parse_desk_query(request.query_params)
-        storage: Storage = app.state.storage
-        findings = storage.list_findings(
-            query.status,
-            hostname=query.host,
-            severity=query.severity,
-        )
-        names = templates.cmdline_rule_names(app.state.rule_pack.rules)
-        return _html(templates.triage_page(findings, query, storage.list_endpoints(), names))
-
     @app.get("/timeline", response_class=HTMLResponse)
-    def timeline(_: None = DashAuth) -> HTMLResponse:
-        return _html(templates.timeline_page(app.state.storage.list_scans_public()))
+    def finding_list(
+        request: Request,
+        *,
+        _: None = DashAuth,
+        status_filter: Annotated[str, Query(alias="status", max_length=16)] = "",
+        hostname: Annotated[str | None, Query(max_length=255)] = None,
+        host: Annotated[str | None, Query(max_length=255)] = None,
+        severity: Annotated[str, Query(max_length=16)] = "",
+        rule_id: Annotated[str | None, Query(max_length=512)] = None,
+        page_number: Annotated[int, Query(alias="page", ge=1, le=1000000)] = 1,
+    ) -> HTMLResponse:
+        try:
+            selected = (
+                "active"
+                if status_filter == "active"
+                else FindingStatus(status_filter).value
+                if status_filter
+                else None
+            )
+            selected_severity = Severity(severity).value if severity else None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="invalid finding filter") from exc
+        if request.url.path == "/triage" and selected is None:
+            selected = "triage"
+        hostname = hostname or host
+        page_size = 50
+        findings = app.state.storage.list_findings(
+            status=selected,
+            limit=page_size + 1,
+            offset=(page_number - 1) * page_size,
+            hostname=hostname or None,
+            severity=selected_severity,
+            rule_id=rule_id or None,
+        )
+        filters = {
+            "status": selected,
+            "hostname": hostname or None,
+            "severity": selected_severity,
+            "rule_id": rule_id or None,
+        }
+        names = templates.cmdline_rule_names(app.state.rule_pack.rules)
+        if request.url.path == "/triage":
+            query = DeskQuery(
+                status=selected or "triage",
+                severity=selected_severity,
+                host=hostname,
+                rule_id=rule_id,
+            )
+            return _html(
+                templates.triage_page(
+                    findings[:page_size],
+                    query,
+                    app.state.storage.list_endpoints(),
+                    names,
+                    filters=filters,
+                    page_number=page_number,
+                    has_next=len(findings) > page_size,
+                )
+            )
+        return _html(
+            templates.timeline_page(
+                app.state.storage.list_scans_public(),
+                findings[:page_size],
+                names,
+                filters=filters,
+                page_number=page_number,
+                has_next=len(findings) > page_size,
+            )
+        )
+
+    @app.get("/findings/{finding_id}", response_class=HTMLResponse)
+    def finding_detail(finding_id: int, _: None = DashAuth) -> HTMLResponse:
+        finding = app.state.storage.get_finding(finding_id)
+        if finding is None:
+            raise HTTPException(status_code=404, detail="finding not found")
+        scan = app.state.storage.get_scan(finding["scan_id"])
+        return _html(
+            templates.finding_detail(
+                finding, scan, templates.cmdline_rule_names(app.state.rule_pack.rules)
+            )
+        )
 
     @app.get("/scans/{scan_id}", response_class=HTMLResponse)
     def scan_facts(scan_id: int, _: None = DashAuth) -> HTMLResponse:
@@ -282,9 +357,11 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901, PLR0915 - cohesive ro
 
     @app.get("/endpoints", response_class=HTMLResponse)
     def endpoints(_: None = DashAuth) -> HTMLResponse:
-        storage = app.state.storage
         return _html(
-            templates.endpoints_table(storage.list_endpoints(), storage.open_finding_counts())
+            templates.endpoints_table(
+                app.state.storage.list_endpoints(app.state.config.stale_after_hours),
+                app.state.storage.open_finding_counts(),
+            )
         )
 
     # -- findings lifecycle ------------------------------------------------
@@ -322,7 +399,7 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901, PLR0915 - cohesive ro
         if not exporter:
             raise HTTPException(status_code=404, detail="unknown export format")
         render, media_type = exporter
-        findings = app.state.storage.list_findings()
+        findings = app.state.storage.list_findings(limit=None)
         content = render(findings)
         filename = f"recon-findings.{fmt}"
         return PlainTextResponse(

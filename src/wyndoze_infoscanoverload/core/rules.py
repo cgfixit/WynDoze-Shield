@@ -53,6 +53,7 @@ _VALID_KINDS = frozenset(
         "cmdline_flag",
     }
 )
+_ACCOUNT_SID = re.compile(r"S-1-5-21-[0-9]+-[0-9]+-[0-9]+-([0-9]+)", re.IGNORECASE)
 
 
 class RuleError(ValueError):
@@ -77,6 +78,8 @@ class Rule:
     substrings: tuple[str, ...] = ()
     states: frozenset[str] = field(default_factory=frozenset)
     allow: frozenset[str] = field(default_factory=frozenset)
+    allow_account_rids: frozenset[int] = field(default_factory=frozenset)
+    platforms: frozenset[str] = field(default_factory=frozenset)
 
     def applies_to_role(self, role: EndpointRole) -> bool:
         """Return True if this rule should run for ``role``."""
@@ -157,6 +160,13 @@ def _parse_rule(raw: dict[str, Any]) -> Rule:
         msg = f"rule {rule_id!r}: ports must be integers"
         raise RuleError(msg) from exc
 
+    allowed_rids = raw.get("allow_account_rids", [])
+    if not isinstance(allowed_rids, list) or any(
+        type(rid) is not int or not 0 < rid < 2**32 for rid in allowed_rids
+    ):
+        msg = f"rule {rule_id!r}: allow_account_rids must be positive 32-bit integers"
+        raise RuleError(msg)
+
     return Rule(
         rule_id=rule_id,
         title=title,
@@ -171,6 +181,8 @@ def _parse_rule(raw: dict[str, Any]) -> Rule:
         substrings=_str_tuple(raw.get("substrings"), lower=True),
         states=frozenset(_str_tuple(raw.get("states"), lower=True)),
         allow=frozenset(_str_tuple(raw.get("allow"), lower=True)),
+        allow_account_rids=frozenset(allowed_rids),
+        platforms=frozenset(_str_tuple(raw.get("platforms"), lower=True)),
     )
 
 
@@ -256,10 +268,7 @@ def _eval_service_present(rule: Rule, report: ScanReport) -> list[str]:
 
 
 def _software_exact(hay: str, names: tuple[str, ...]) -> bool:
-    """Match a whole name or a name plus a version.
-
-    A short name must not match inside a longer word.
-    """
+    """Match a whole name or a name plus a version, rather than a word within another word."""
     if not names:
         return False
     compact = " ".join(re.findall(r"[a-z0-9]+", hay))
@@ -276,7 +285,16 @@ def _eval_software_present(rule: Rule, report: ScanReport) -> list[str]:
 
 
 def _eval_local_admin_unexpected(rule: Rule, report: ScanReport) -> list[str]:
-    return sorted(admin for admin in report.local_admins if admin.lower() not in rule.allow)
+    unexpected: list[str] = []
+    sids = {name.lower(): sid for name, sid in report.local_admin_sids.items()}
+    for admin in report.local_admins:
+        if admin.lower() in rule.allow:
+            continue
+        sid = _ACCOUNT_SID.fullmatch(sids.get(admin.lower(), ""))
+        if sid and int(sid.group(1)) in rule.allow_account_rids:
+            continue
+        unexpected.append(admin)
+    return sorted(unexpected)
 
 
 def _eval_cmdline_flag(rule: Rule, report: ScanReport) -> list[str]:
@@ -285,6 +303,11 @@ def _eval_cmdline_flag(rule: Rule, report: ScanReport) -> list[str]:
 
 
 def _eval_missing_expected_service(rule: Rule, report: ScanReport) -> list[str]:
+    health = report.collection_health.get("services")
+    if health is not None and (health.status != "ok" or health.truncated):
+        return []
+    if not report.services and "windows" in rule.platforms:
+        return []
     present = " ".join(f"{s.name} {s.display_name}" for s in report.services).lower()
     missing = [sub for sub in rule.substrings if sub not in present]
     # Fires only if ALL expected services are missing would be too weak; we
@@ -312,6 +335,8 @@ def evaluate(report: ScanReport, pack: RulePack) -> list[Finding]:
     findings: list[Finding] = []
     for rule in pack.rules:
         if not rule.applies_to_role(report.role):
+            continue
+        if rule.platforms and report.platform.system.lower() not in rule.platforms:
             continue
         evaluator = _EVALUATORS[rule.kind]
         evidence = evaluator(rule, report)

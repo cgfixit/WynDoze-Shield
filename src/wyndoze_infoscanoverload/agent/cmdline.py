@@ -7,8 +7,9 @@ import re
 from wyndoze_infoscanoverload.agent.crypto import encrypt_bytes
 from wyndoze_infoscanoverload.core.models import ScanReport
 
-# Clip before encrypt so the Fernet token fits the model field.
+# Bound UTF-8 bytes as well as characters so Fernet fits the 4096-character field.
 _PLAIN_MAX = 800
+_PLAIN_MAX_BYTES = 3000
 _FLAG_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("encoded-powershell", re.compile(r"(?i)(?:-enc(?:odedcommand)?\b|frombase64string)")),
     ("invoke-expression", re.compile(r"(?i)\b(?:iex|invoke-expression)\b")),
@@ -45,5 +46,6 @@ def seal_command_lines(report: ScanReport, key: str) -> None:
         for name, pattern in _FLAG_PATTERNS:
             if pattern.search(clipped):
                 flags.add(name)
-        proc.cmdline = encrypt_bytes(clipped.encode("utf-8"), key).decode("ascii")
+        payload = clipped.encode("utf-8")[:_PLAIN_MAX_BYTES].decode("utf-8", errors="ignore")
+        proc.cmdline = encrypt_bytes(payload.encode("utf-8"), key).decode("ascii")
     report.cmdline_flags = sorted(flags)

@@ -1,16 +1,29 @@
 # WynDoze-InfoScanOverload default rule pack.
-# Hand-written starter checks. Review and tune before relying on them.
+# Reviewed v1.2. Heuristics mapped to MITRE ATT&CK; tuned against the engine
+# in core/rules.py (exact process-name match, service/software substring match).
 #
 # Each rule is pure data. Supported kinds: listening_port, process_name,
 # service_present, software_present, local_admin_unexpected,
-# missing_expected_service. Optional `roles` scopes a rule; `technique` maps to
-# MITRE ATT&CK.
+# missing_expected_service, cmdline_flag. Optional `roles` scopes a rule;
+# `technique` maps to MITRE ATT&CK.
+#
+# v1.2 also adds platform scoping, canonical administrator RIDs, and advisory
+# calibration for ordinary recovery/update tools and short tunnel names.
+# Change log from v1.0:
+#   - Added SMB/NetBIOS/SMB-over-IP and MSSQL listener checks (lateral movement).
+#   - Added shadow-copy deletion and event-log clearing process checks (T1490/T1070).
+#   - Added RMM/stealth tunnel software checks (ScreenConnect etc. already present).
+#   - Added stopped-Defender/MDE and stopped-Windows-Update service checks.
+#   - Added Print Spooler check scoped to server roles (PrintNightmare class).
+#   - Added missing-expected-service posture checks (Defender, event log, VSS).
+#   - Removed `lsass.exe.dmp` from process names: exact-name matching can never
+#     fire on a .dmp file; dump artifacts are covered by cmdline `credential-hive`.
 
 name: windows-default
-version: "1.0"
+version: "1.2"
 
 rules:
-  # --- Exposed remote-access surface ---------------------------------------
+  # --- Exposed remote-access / lateral-movement surface ----------------------
   - id: net-rdp-listener
     title: RDP listener exposed
     kind: listening_port
@@ -19,6 +32,33 @@ rules:
     message: Remote Desktop (3389) is listening. Verify it is required and firewalled.
     technique: T1021.001
     ports: [3389]
+
+  - id: net-smb-listener
+    title: SMB listener exposed
+    kind: listening_port
+    severity: medium
+    category: exposed_service
+    message: SMB (445) is listening. Confirm the host is not internet-reachable; SMB is the primary lateral-movement and ransomware-spread vector.
+    technique: T1021.002
+    ports: [445]
+
+  - id: net-rpc-netbios-listener
+    title: RPC/NetBIOS listener exposed
+    kind: listening_port
+    severity: low
+    category: exposed_service
+    message: RPC endpoint mapper (135) or NetBIOS session service (139) is listening. Restrict to trusted subnets.
+    technique: T1021.003
+    ports: [135, 139]
+
+  - id: net-mssql-listener
+    title: Database listener exposed
+    kind: listening_port
+    severity: medium
+    category: exposed_service
+    message: MSSQL (1433) or MySQL (3306) is listening on this host. Database ports should not be exposed on backup/general endpoints.
+    technique: T1021
+    ports: [1433, 3306]
 
   - id: net-winrm-listener
     title: WinRM listener exposed
@@ -43,9 +83,9 @@ rules:
     kind: listening_port
     severity: high
     category: exposed_service
-    message: Port 5900 (VNC) or 4444 (a common bind shell) is listening.
+    message: Port 5900 (VNC), 4444 (a common bind shell), or 6667 (unencrypted IRC, a common C2 channel) is listening.
     technique: T1219
-    ports: [5900, 4444]
+    ports: [5900, 4444, 6667]
 
   - id: net-rdp-on-backup-server
     title: RDP exposed on a backup server
@@ -57,7 +97,7 @@ rules:
     roles: [backup_server, repository]
     ports: [3389]
 
-  # --- Dual-use / offensive tooling ----------------------------------------
+  # --- Dual-use / offensive tooling -------------------------------------------
   - id: proc-credential-dumping
     title: Credential-dumping tool observed
     kind: process_name
@@ -68,7 +108,6 @@ rules:
     names:
       - mimikatz.exe
       - procdump.exe
-      - lsass.exe.dmp
       - ntdsutil.exe
       - lazagne.exe
       - rubeus.exe
@@ -76,6 +115,7 @@ rules:
       - pwdump.exe
       - wce.exe
       - gsecdump.exe
+      - nanodump.exe
 
   - id: proc-malware-adware
     title: Known malware, miner, or adware process observed
@@ -87,6 +127,7 @@ rules:
     names:
       - xmrig.exe
       - minergate.exe
+      - nicehash.exe
       - kmsauto.exe
       - kmspico.exe
       - autokms.exe
@@ -96,6 +137,8 @@ rules:
       - asyncrat.exe
       - njrat.exe
       - darkcomet.exe
+      - cobaltstrike.exe
+      - beacon.exe
 
   - id: proc-lateral-movement
     title: Lateral-movement / remote-exec tool observed
@@ -109,6 +152,20 @@ rules:
       - psexesvc.exe
       - paexec.exe
       - wmic.exe
+      - wmiexec.exe
+
+  - id: proc-defense-evasion
+    title: Recovery or event-log administration utility observed
+    kind: process_name
+    severity: low
+    category: defense_evasion
+    message: An administration utility is running. Its process name alone does not establish log clearing, recovery inhibition, or tampering; confirm its use.
+    technique: T1070
+    names:
+      - wevtutil.exe
+      - vssadmin.exe
+      - diskshadow.exe
+      - bcdedit.exe
 
   - id: proc-exfil-archiver
     title: Archiver / exfiltration tool observed
@@ -134,8 +191,11 @@ rules:
       - anydesk.exe
       - teamviewer.exe
       - screenconnect.exe
+      - rustdesk.exe
       - ngrok.exe
+      - ngrok-stable.exe
 
+  # --- Installed software ------------------------------------------------------
   - id: sw-remote-access-installed
     title: Remote-access software is installed
     kind: software_present
@@ -146,9 +206,32 @@ rules:
     substrings:
       - tightvnc
       - realvnc
+      - ultravnc
       - rustdesk
       - anydesk
       - teamviewer
+      - screenconnect
+      - logmein
+      - gotoassist
+      - splashtop
+      - ammyy
+      - connectwise
+      - kaseya
+      - dameware
+
+  - id: sw-tunnel-software
+    title: Tunnel / port-forwarding software is installed
+    kind: software_present
+    severity: high
+    category: remote_access
+    message: A tunneling or port-forwarding tool is installed. These are frequently abused for C2 and exfiltration.
+    technique: T1572
+    substrings:
+      - ngrok
+      - cloudflared
+      - localtonet
+      - pagekite
+    names: [frp, chisel]
 
   - id: sw-pup-adware
     title: Adware or risky bundled software is installed
@@ -158,6 +241,7 @@ rules:
     message: Installed software often bundles adware or is a common piracy tool.
     substrings:
       - kmspico
+      - kmsauto
       - driver booster
       - advanced systemcare
       - segurazo
@@ -181,9 +265,14 @@ rules:
       - mobaxterm
       - bitvise
       - cyberduck
+      - powershell empire
+      - bloodhound
+      - crackmapexec
+      - netexec
     names:
       - kitty
 
+  # --- Services ----------------------------------------------------------------
   - id: svc-remote-access
     title: Remote-access service is present
     kind: service_present
@@ -196,6 +285,8 @@ rules:
       - anydesk
       - screenconnect
       - rustdesk
+      - logmein
+      - splashtop
 
   - id: svc-risky-windows
     title: Risky Windows service is running
@@ -209,6 +300,46 @@ rules:
       - remoteregistry
       - tlntsvr
 
+  - id: svc-defender-or-mde-stopped
+    platforms: [windows]
+    title: Endpoint protection service is not running
+    kind: service_present
+    severity: high
+    category: defense_evasion
+    message: Windows Defender (WinDefend) or Defender for Endpoint (Sense) exists but is stopped. AV tampering is a common precursor to ransomware.
+    technique: T1562.001
+    states: [stopped]
+    substrings:
+      - windefend
+      - sense
+
+  - id: svc-windows-update-stopped
+    platforms: [windows]
+    title: Windows Update service is not running
+    kind: service_present
+    severity: low
+    category: posture
+    message: Windows Update is stopped. Trigger-start services may normally be idle; verify update policy and patch status before treating this as a problem.
+    states: [stopped]
+    substrings:
+      - wuauserv
+
+  - id: svc-spooler-on-server
+    platforms: [windows]
+    title: Print Spooler running on a server
+    kind: service_present
+    severity: high
+    category: posture
+    message: The Print Spooler service is running on a server role. Spooler is a recurrent privilege-escalation vector (PrintNightmare class) and is rarely needed on backup/DC roles.
+    technique: T1068
+    roles: [backup_server, repository, domain_controller]
+    states: [running]
+    substrings:
+      - spooler
+
+  # --- Command-line heuristics (opt-in, sealed) ---------------------------------
+  # NOTE: flags referenced here must exist in agent/cmdline.py::_FLAG_PATTERNS.
+  # New command-line heuristics require an agent code change first.
   - id: cmd-suspicious-line
     title: Suspicious command-line pattern observed
     kind: cmdline_flag
@@ -227,6 +358,42 @@ rules:
       - bitsadmin-transfer
       - startup-run-key
 
+  # --- Posture: expected services missing ---------------------------------------
+  - id: svc-defender-missing
+    platforms: [windows]
+    title: Windows Defender service not present
+    kind: missing_expected_service
+    severity: medium
+    category: posture
+    message: No Windows Defender service was found on the host. AV may be replaced by a third party (verify) or absent entirely.
+    technique: T1562.001
+    substrings:
+      - windefend
+
+  - id: svc-eventlog-missing
+    platforms: [windows]
+    title: Windows Event Log service not present
+    kind: missing_expected_service
+    severity: high
+    category: posture
+    message: The Windows Event Log (EventLog) service was not found. Without event logging, detection and forensics are blind.
+    technique: T1562.002
+    substrings:
+      - eventlog
+
+  - id: svc-vss-missing-on-backup
+    platforms: [windows]
+    title: VSS not present on a backup server
+    kind: missing_expected_service
+    severity: medium
+    category: posture
+    message: The Volume Shadow Copy service was not found on a backup-role host. Snapshots/backups may not be functioning.
+    technique: T1490
+    roles: [backup_server, repository]
+    substrings:
+      - vss
+
+  # --- Accounts -------------------------------------------------------------------
   - id: admin-unexpected-local-admin
     title: Unexpected local administrator
     kind: local_admin_unexpected
@@ -234,6 +401,7 @@ rules:
     category: accounts
     message: A local administrator account is present that is not on the approved allow-list.
     technique: T1078
+    allow_account_rids: [500, 512]
     allow:
       - administrator
       - domain admins
