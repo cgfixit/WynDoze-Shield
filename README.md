@@ -152,6 +152,11 @@ WynDoze-InfoScanOverload-agent evaluate-local report.json          # prints find
 
 ## Configuration
 
+Ingest authenticates before reading. It counts streamed bytes before retention
+and returns 413 on the chunk crossing 8 MiB, without consuming the rest or writing
+scan data. This bounds the application's retained body, independently of framing
+headers; transport buffers remain separate.
+
 All configuration is environment-driven (Pydantic Settings).
 
 ### Agent (`RECON_AGENT_*`)
