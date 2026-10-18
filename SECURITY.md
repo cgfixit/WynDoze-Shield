@@ -1,21 +1,23 @@
-# Security Policy
+# Security policy
 
-## Supported Versions
+Security fixes target the current `main` branch. Older commits and feature
+branches do not have a separate security maintenance commitment. Windows 10/11,
+Windows Server 2016/2019/2022/2025, and Python 3.12+ are compatibility targets;
+see the README for the limits of platform verification.
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Report suspected vulnerabilities through GitHub's
+[private vulnerability reporting](https://github.com/cgfixit/WynDoze-Shield/security/advisories/new).
+Include the affected commit or version, OS/Python version, expected and actual
+behavior, and minimal reproduction steps using synthetic data. Do not open a
+public issue containing an exploit, real inventory, credentials, encryption
+keys, or unredacted logs. Ordinary bugs without sensitive details can use issues.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+Reports are reviewed on a best-effort basis; no response-time or fix-time SLA is
+promised. Use the private report thread to coordinate reproduction and disclosure.
 
-## Reporting a Vulnerability
-
-Use this section to tell people how to report a vulnerability.
-
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Run the scanner only on systems you own or are authorized to assess. Findings
+are heuristic review prompts, not proof of compromise or a guarantee that a
+host is secure. Inventory and exports can identify people and machines. Optional
+command lines can contain secrets even when encrypted. The SQLite database and
+plain exports are not encrypted by the application; operators must manage
+access, storage protection, retention, and deletion.
