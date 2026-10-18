@@ -165,6 +165,7 @@ Supported rule kinds:
 | `software_present` | Installed software matches a substring |
 | `local_admin_unexpected` | A local admin not on the allow-list is present |
 | `missing_expected_service` | An expected service is absent |
+| `cmdline_flag` | An opted-in command line produced a matching pattern label; the server uses the label rather than decrypting text |
 
 Every rule may declare `roles:` (scope to endpoint roles) and `technique:`
 (a MITRE ATT&CK id).
