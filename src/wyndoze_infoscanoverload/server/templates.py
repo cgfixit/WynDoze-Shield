@@ -21,6 +21,8 @@ header h1 { margin: 0; font-size: 18px; }
 header .sub { color: #8b949e; font-size: 12px; margin-top: 4px; }
 nav { padding: 12px 24px; background: #0d1117; border-bottom: 1px solid #30363d; }
 nav a { color: #58a6ff; margin-right: 16px; text-decoration: none; font-size: 14px; }
+a { color: #58a6ff; }
+a:focus-visible { outline: 2px solid #58a6ff; outline-offset: 2px; }
 nav a:hover { text-decoration: underline; }
 main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
