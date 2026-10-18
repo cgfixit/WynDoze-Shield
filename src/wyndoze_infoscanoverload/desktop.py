@@ -288,9 +288,13 @@ def main() -> None:  # noqa: C901, PLR0915 - one window, one place
     ttk.Label(frame, text=ABOUT, wraplength=580, justify="left").pack(anchor="w", pady=(8, 12))
     ttk.Label(
         frame,
-        text=f"Dashboard user admin. Password for this window: {password}",
+        text="Dashboard user admin. Password for this window (select and copy):",
         wraplength=580,
     ).pack(anchor="w")
+    password_value = tk.StringVar(value=password)
+    ttk.Entry(
+        frame, textvariable=password_value, state="readonly", width=36, exportselection=False
+    ).pack(anchor="w", pady=(4, 0))
 
     role = tk.StringVar(value="workstation")
     cadence = tk.StringVar(value="daily")

@@ -42,6 +42,8 @@ $env:RECON_DASHBOARD_PASSWORD = "devpassword"
 
 Or run `deploy\windows\Start-WynDoze.ps1`. That script installs the venv and opens a window with the same scan, start, and stop actions. Email alerts stay off until you check the box. A scheduled task from that window collects locally for the current user. It does not upload.
 
+The window shows its generated dashboard password in a read-only text field. Select the password and press Ctrl+C (Command+C on macOS), then paste it into the browser's password prompt for user `admin`. Each new launcher session generates a new password.
+
 Open http://127.0.0.1:8000/ and sign in as `admin`. In a second shell, with the same venv:
 
 ```powershell

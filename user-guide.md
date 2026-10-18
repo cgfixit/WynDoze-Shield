@@ -10,6 +10,8 @@ Use this scanner only on systems you own or are authorized to assess.
 
 `deploy\windows\Start-WynDoze.ps1` creates `.venv` when it is missing, installs the server extra, and opens a window. The window shows the product name, a short description, a scan role, and buttons to run a collect-only scan, start the dashboard, stop the dashboard, and open `documentation.pdf` when that file is in the project folder. Email alerts are off until you check the box and fill in the SMTP host, port, username, password, and recipient. The password stays in that process. It is not written into the repo.
 
+The generated dashboard password is in a read-only field near the top of the window. Select it with the mouse or focus the field and press Ctrl+A, then press Ctrl+C. After **Start dashboard** opens the browser, sign in as `admin` and paste the password with Ctrl+V. On macOS use Command instead of Ctrl. The field cannot change the active password; reopening the launcher generates a new one.
+
 The schedule buttons register `WynDoze-InfoScanOverload-scan` for the current user, daily, weekly, or monthly, at 02:30. That task runs `scan --no-upload`. It does not upload and it does not send mail. It is not a SYSTEM task. The existing `Install-ReconAgentTask.ps1` script is still the separate admin path for a daily SYSTEM task.
 
 ## Install
