@@ -73,6 +73,43 @@ def page(title: str, body: str) -> str:
     )
 
 
+def _coverage_html(health: dict[str, Any]) -> str:
+    if not health:
+        return "Unknown (older agent)"
+    parts = []
+    names = (
+        "ip_addresses",
+        "processes",
+        "listening_connections",
+        "services",
+        "installed_software",
+        "local_admins",
+    )
+    for name in names:
+        result = health.get(name)
+        if not isinstance(result, dict):
+            parts.append(f"{name}: unknown")
+            continue
+        issues = ", ".join(str(issue) for issue in result.get("issues", []))
+        parts.append(
+            f"{name}: {result.get('status', 'unknown')} "
+            f"({result.get('item_count', 0)} items, {result.get('duration_ms', 0)} ms)"
+            + (f"; {issues}" if issues else "")
+        )
+    incomplete = any(
+        isinstance(result, dict) and (result.get("status") != "ok" or result.get("truncated"))
+        for result in health.values()
+    )
+    label = "Incomplete collection" if incomplete else "Collection reported complete"
+    if not incomplete and len(health) != len(names):
+        label = "Unknown coverage"
+    return (
+        f"<details><summary>{label}</summary><ul>"
+        + "".join(f"<li>{escape(part)}</li>" for part in parts)
+        + "</ul></details>"
+    )
+
+
 def summary_page(summary: dict[str, Any]) -> str:
     """Render the Summary report landing page."""
     sev = summary.get("active_findings_by_severity", {})
@@ -162,43 +199,6 @@ def findings_table(findings: list[dict[str, Any]], title: str, *, actions: bool 
         f"{rows}</tbody></table>"
     )
     return page(f"WynDoze-InfoScanOverload {title}", body)
-
-
-def _coverage_html(health: dict[str, Any]) -> str:
-    if not health:
-        return "Unknown (older agent)"
-    parts = []
-    names = (
-        "ip_addresses",
-        "processes",
-        "listening_connections",
-        "services",
-        "installed_software",
-        "local_admins",
-    )
-    for name in names:
-        result = health.get(name)
-        if not isinstance(result, dict):
-            parts.append(f"{name}: unknown")
-            continue
-        issues = ", ".join(str(issue) for issue in result.get("issues", []))
-        parts.append(
-            f"{name}: {result.get('status', 'unknown')} "
-            f"({result.get('item_count', 0)} items, {result.get('duration_ms', 0)} ms)"
-            + (f"; {issues}" if issues else "")
-        )
-    incomplete = any(
-        isinstance(result, dict) and (result.get("status") != "ok" or result.get("truncated"))
-        for result in health.values()
-    )
-    label = "Incomplete collection" if incomplete else "Collection reported complete"
-    if not incomplete and len(health) != len(names):
-        label = "Unknown coverage"
-    return (
-        f"<details><summary>{label}</summary><ul>"
-        + "".join(f"<li>{escape(part)}</li>" for part in parts)
-        + "</ul></details>"
-    )
 
 
 def endpoints_table(endpoints: list[dict[str, Any]]) -> str:
