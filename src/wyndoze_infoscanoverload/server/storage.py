@@ -12,9 +12,8 @@ Three tables:
     the triage lifecycle status. Deduplicated per (host, rule, evidence) so a
     recurring condition does not spam the triage inbox.
 
-SQLite is fine for the MVP / small estates (the official product supports 10
-endpoints). For larger scale, swap this module for a PostgreSQL-backed one —
-the rest of the app depends only on this interface.
+SQLite stores local inventory and triage state. Capacity depends on inventory
+volume, retention, and the host; no endpoint-count guarantee is implied.
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@ Native acceptance is still required on each OS; this target list is not a
 certification. The guide gets a loopback dashboard and one agent scan running.
 It does not register a scheduled task unless you run that script yourself.
 
-The product is an internal scanner.
+Use this scanner only on systems you own or are authorized to assess.
 
 ## Install
 
@@ -58,7 +58,17 @@ To collect without uploading:
 
 Delete `report.json` when you are done. It contains host inventory. Every process row has `cmdline` set to null unless you pass `--cmdline`.
 
+Inventory can contain usernames, hostnames, addresses, and executable paths.
+The application does not encrypt its SQLite database or plain exports. Protect
+those files and backups, decide how long to keep them, and do not post real
+inventory or credentials in public issues. Use [private security reporting](SECURITY.md)
+for suspected vulnerabilities.
+
 `--cmdline` also needs `RECON_AGENT_ENCRYPTION_KEY`. The agent checks the line in memory, keeps a short pattern name such as `encoded-powershell`, and replaces the line with a Fernet token before the report is written or uploaded. The dashboard does not need the key to score that pattern name. Anyone who has the key can decrypt the token. Keep the key off the server if you do not want the server to be able to read those lines.
+
+Command lines may include passwords or tokens supplied to other programs.
+Sealing encrypts the retained text; it does not redact embedded secrets. Leave
+command-line collection off unless you need it and have authorized its use.
 
 Pattern matching examines at most 800 characters. Before encryption, the stored
 prefix is also limited to 3000 UTF-8 bytes without splitting a character. This
@@ -85,6 +95,7 @@ ASGI chunk, concurrent requests, and valid JSON parsing also consume memory.
 ## Work the inbox
 
 The installed v1.2 rule pack matches the source copy and contains 28 rules.
+Both files must be updated together; a regression check rejects policy drift.
 Treat tool and service presence as context for review, not a malware verdict.
 Windows-only missing-service hints require a nonempty service inventory.
 
