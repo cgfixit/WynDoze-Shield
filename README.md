@@ -198,6 +198,9 @@ See [`deploy/`](deploy/):
   `C:\ProgramData\WynDoze-InfoScanOverload\agent.env` and locks that file to SYSTEM and
   Administrators. This tree does not register the task for you.
   The dashboard database defaults to `C:\ProgramData\WynDoze-InfoScanOverload\WynDoze-InfoScanOverload.sqlite3`.
+  Use the installed agent `.exe` shim for `-PythonExe`. The daily trigger adds
+  up to 30 minutes of random delay. The UTF-8 wrapper quotes paths and passes
+  the agent exit code to Task Scheduler; ACL failures stop installation.
 
 Operator guides: [user-guide.md](user-guide.md) and [feature.map.md](feature.map.md).
 

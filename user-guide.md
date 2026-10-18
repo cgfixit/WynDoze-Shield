@@ -86,4 +86,9 @@ For a machine with no route to the server, use `bundle`, move the `.WynDoze-Info
 
 Run `deploy\windows\Install-ReconAgentTask.ps1` only when you want a SYSTEM task. Set `RECON_AGENT_TOKEN` and `RECON_AGENT_ENCRYPTION_KEY` in that admin session first. The script writes `C:\ProgramData\WynDoze-InfoScanOverload\agent.env`, locks the file to SYSTEM and Administrators, and registers `ReconAgentDailyScan`. It does not write Machine environment variables.
 
-Quote is already applied to the server URL and the cache directory inside the script. The task is allowed to start on battery.
+Pass the installed `WynDoze-InfoScanOverload-agent.exe` shim to `-PythonExe`,
+rather than `python.exe`. The daily trigger adds up to 30 minutes of random
+delay. Native `-File` arguments use double quotes, while values inside the
+UTF-8 wrapper use PowerShell quoting. The wrapper returns the agent exit code,
+and installation stops if a task-state ACL cannot be applied. The task is
+allowed to start on battery.

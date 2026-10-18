@@ -66,4 +66,7 @@ Windows software comes from `reg.exe` with `/reg:64` and `/reg:32`, decoded as O
 
 ## Not in this tree
 
-There is no Docker deploy path in this tree. There is no git remote. The scheduled task script is present and was not executed.
+There is no Docker deploy path in this tree. The Windows installer explicitly
+registers a daily SYSTEM task with up to 30 minutes of trigger jitter when an
+operator runs it. Its wrapper returns the agent exit code. Verification uses
+synthetic state and mocked task registration; it does not install a task.
