@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from wyndoze_infoscanoverload.core.models import ScanReport, SoftwareInfo
+from wyndoze_infoscanoverload.core.models import ProcessInfo, ScanReport, SoftwareInfo
 from wyndoze_infoscanoverload.core.rulepacks import default_rule_pack
 from wyndoze_infoscanoverload.core.rules import RuleError, evaluate, load_rule_pack
 
@@ -45,7 +45,8 @@ def test_admin_tools_are_low(clean_report: ScanReport, software_name: str) -> No
     findings = evaluate(report, default_rule_pack())
     hit = next(item for item in findings if item.rule_id == "sw-potentially-suspicious")
     assert hit.severity.value == "low"
-    assert hit.title == "Potentially suspicious software is installed"
+    assert hit.title == "Administration or dual-use software is installed"
+    assert hit.category == "administration"
     assert "sw-pup-adware" not in {item.rule_id for item in findings}
 
 
@@ -118,3 +119,12 @@ def test_unknown_severity_is_rejected(tmp_path: Path) -> None:
     )
     with pytest.raises(RuleError):
         load_rule_pack(pack_file)
+
+
+@pytest.mark.parametrize(
+    "name", ["procdump.exe", "procdump64.exe", "procdump64a.exe", "ntdsutil.exe"]
+)
+def test_diagnostic_process_presence_is_advisory(clean_report: ScanReport, name: str) -> None:
+    clean_report.processes = [ProcessInfo(name=name)]
+    findings = evaluate(clean_report, default_rule_pack())
+    assert [(f.rule_id, f.severity.value) for f in findings] == [("proc-diagnostic-admin", "low")]

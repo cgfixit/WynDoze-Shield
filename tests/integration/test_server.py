@@ -554,7 +554,7 @@ def test_scan_page_hides_command_lines(
     collision = _article(page.text, "Colliding process name")
     assert "<h4>Evidence</h4>" in collision
     assert "Matched pattern" not in collision
-    matched = _article(page.text, "Suspicious command-line pattern observed")
+    matched = _article(page.text, "Command-line supporting signal observed")
     assert "<h4>Matched pattern</h4>" in matched
     assert 'value="/scans/1"' in page.text
     moved = client.post(

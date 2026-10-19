@@ -82,9 +82,12 @@ def _const_eq(left: str, right: str) -> bool:
 
 
 def _allowed_flags(pack: RulePack) -> frozenset[str]:
-    """Return lowercased names from loaded cmdline_flag rules."""
+    """Return labels declared by loaded command-line rules."""
     return frozenset(
-        name for rule in pack.rules if rule.kind == "cmdline_flag" for name in rule.names
+        name
+        for rule in pack.rules
+        if rule.kind == "cmdline_flag"
+        for name in (*rule.names, *rule.all_flags, *rule.any_flags)
     )
 
 

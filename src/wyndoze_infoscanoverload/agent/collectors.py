@@ -193,7 +193,8 @@ def collect_ip_addresses() -> list[str]:
 
 def _cmdline_text(value: object) -> str | None:
     if isinstance(value, list):
-        text = " ".join(str(part) for part in value if part)
+        # Preserve Windows argv boundaries consistently when fixtures run off Windows.
+        text = subprocess.list2cmdline([str(part) for part in value if part])
     elif value:
         text = str(value)
     else:
