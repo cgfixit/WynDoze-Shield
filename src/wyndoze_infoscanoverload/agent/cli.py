@@ -281,6 +281,7 @@ def replay(
 
     ok = 0
     failed = 0
+    cleanup_failed = 0
     for path in bundles:
         try:
             report = cache.load(path)
@@ -298,10 +299,21 @@ def replay(
         ok += 1
         typer.secho(f"  {path.name}: uploaded", fg=typer.colors.GREEN)
         if delete_on_success:
-            path.unlink(missing_ok=True)
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as exc:
+                cleanup_failed += 1
+                typer.secho(
+                    f"  {path.name}: uploaded but could not delete ({exc}); "
+                    "the retained bundle may upload again on the next replay.",
+                    fg=typer.colors.YELLOW,
+                    err=True,
+                )
 
     typer.echo(f"Replay complete: {ok} uploaded, {failed} failed.")
-    if failed:
+    if cleanup_failed:
+        typer.echo(f"{cleanup_failed} uploaded bundle(s) could not be deleted.", err=True)
+    if failed or cleanup_failed:
         raise typer.Exit(code=1)
 
 
