@@ -13,14 +13,13 @@ Supported rule kinds
     Fires when a process whose name matches (case-insensitive, exact) any
     listed value is running.
 ``service_present``
-    Fires when a service whose name/display-name contains a listed substring
-    exists (optionally scoped to states, e.g. RUNNING).
+    Matches exact names or explicit name/display-name substrings, optionally by state.
 ``software_present``
     Fires when installed software matches a listed substring.
 ``local_admin_unexpected``
     Fires when a local administrator is present who is not on an allow-list.
 ``missing_expected_service``
-    Fires when an expected service is absent. Used for posture checks.
+    Fires when an exact name or explicit substring is absent. Used for posture checks.
 
 Every rule may declare a ``roles`` list to scope it to specific endpoint
 roles, and a ``technique`` (MITRE ATT&CK id) for classification.
@@ -260,7 +259,7 @@ def _eval_service_present(rule: Rule, report: ScanReport) -> list[str]:
     hits: list[str] = []
     for svc in report.services:
         haystack = f"{svc.name} {svc.display_name}".lower()
-        if any(sub in haystack for sub in rule.substrings):
+        if svc.name.lower() in rule.names or any(sub in haystack for sub in rule.substrings):
             if rule.states and svc.state.lower() not in rule.states:
                 continue
             hits.append(svc.name or svc.display_name)
@@ -310,9 +309,15 @@ def _eval_missing_expected_service(rule: Rule, report: ScanReport) -> list[str]:
         return []
     present = " ".join(f"{s.name} {s.display_name}" for s in report.services).lower()
     missing = [sub for sub in rule.substrings if sub not in present]
+    names = {s.name.lower() for s in report.services}
+    exact_missing = [
+        f"expected service {name!r} not found" for name in rule.names if name not in names
+    ]
     # Fires only if ALL expected services are missing would be too weak; we
     # fire when ANY expected service is absent.
-    return [f"expected service matching {sub!r} not found" for sub in missing]
+    return sorted(
+        exact_missing + [f"expected service matching {sub!r} not found" for sub in missing]
+    )
 
 
 _EVALUATORS = {

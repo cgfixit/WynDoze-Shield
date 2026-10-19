@@ -102,3 +102,25 @@ rules:
 """)
     report = ScanReport(hostname="H", scan_time_utc="2026-10-18T12:00:00Z")
     assert [f.rule_id for f in evaluate(report, pack)] == ["expected"]
+
+
+def test_windows_service_names_are_exact():
+    report = ScanReport(
+        hostname="H",
+        scan_time_utc="2026-10-18T12:00:00Z",
+        platform=PlatformInfo(system="Windows"),
+        services=[
+            ServiceInfo(name="LicenseSenseService", state="stopped"),
+            ServiceInfo(name="VendorEventLogHelper", display_name="EventLog"),
+        ],
+    )
+    findings = evaluate(report, default_rule_pack())
+    assert "svc-defender-or-mde-stopped" not in {f.rule_id for f in findings}
+    assert "svc-eventlog-missing" in {f.rule_id for f in findings}
+    report.services = [ServiceInfo(name="EVENTLOG"), ServiceInfo(name="Sense", state="stopped")]
+    findings = evaluate(report, default_rule_pack())
+    assert "svc-eventlog-missing" not in {f.rule_id for f in findings}
+    assert (
+        next(f for f in findings if f.rule_id == "svc-defender-or-mde-stopped").severity.value
+        == "low"
+    )

@@ -224,15 +224,15 @@ list, defaults, and limits are in [feature.map.md](feature.map.md#agent-environm
 ## Rules engine
 
 Rules are declarative YAML. The source pack (`rules/windows_default.yaml`) and
-the bundled copy under `core/rulepacks/` are `windows-default` v1.2 and ship
-the same **28 rules** across **7 rule kinds**; CI's invariant guard rejects any
+the bundled copy under `core/rulepacks/` are `windows-default` v1.3 and ship
+the same policy across **7 rule kinds**; CI's invariant guard rejects any
 drift between the two.
 
 | Kind | Fires when |
 |---|---|
 | `listening_port` | A listed port is listening locally |
 | `process_name` | A process matching a listed name is running |
-| `service_present` | A service matching a substring exists (optional state filter) |
+| `service_present` | An exact service `names` entry or explicit `substrings` entry exists (optional state filter) |
 | `software_present` | Installed software matches a substring |
 | `local_admin_unexpected` | A local admin not on the allow-list is present |
 | `missing_expected_service` | An expected service is absent |
@@ -245,6 +245,10 @@ Update service are low-severity hints; short tunnel software names use
 whole-name matching to reduce incidental hits. Windows missing-service checks
 require a nonempty service inventory and do not infer absence from partial or
 failed service collection.
+Windows components use exact, case-insensitive service names; explicit substring
+matching remains available for product variants and legacy custom rules. Stopped or
+missing Defender is an advisory requiring configured protection-policy context;
+service state alone does not establish active/passive protection or tampering.
 
 Windows reports retain administrator display names and add a bounded
 `local_admin_sids` mapping. The bundled admin rule accepts account-domain RIDs

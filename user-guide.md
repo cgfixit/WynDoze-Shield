@@ -137,10 +137,14 @@ ASGI chunk, concurrent requests, and valid JSON parsing also consume memory.
 
 ## Work the inbox
 
-The installed v1.2 rule pack matches the source copy and contains 28 rules.
+The installed v1.3 rule pack matches the source copy.
 Both files must be updated together; a regression check rejects policy drift.
 Treat tool and service presence as context for review, not a malware verdict.
 Windows-only missing-service hints require a nonempty service inventory.
+Windows component services match exact names, case-insensitively. Product/custom
+rules may still declare explicit substrings. Stopped/missing WinDefend or Sense is
+advisory: check protection policy and active/passive/third-party state rather than
+inferring tampering. Legacy empty/incomplete-inventory behavior remains unchanged.
 
 Local administrator names are accompanied by SIDs. Built-in Administrator
 (RID 500) and Domain Admins (RID 512) are recognized by account-domain SID,
