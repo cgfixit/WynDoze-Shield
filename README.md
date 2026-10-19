@@ -2,30 +2,28 @@
 
 A self-hosted agent and dashboard for endpoint inventory. Lightweight agents
 collect local telemetry. A loopback server evaluates project-authored heuristics
-mapped to MITRE ATT&CK® techniques. An analyst reviews the findings in a triage inbox.
- Designed for **Windows 10, Windows 11,
-and Windows Server 2016, 2019, 2022, and 2025**, with **Python 3.12+**.
-These are compatibility targets; native acceptance on each OS is still required.
+mapped to MITRE ATT&CK® techniques. An analyst reviews the findings in a triage
+inbox. Designed for **Windows 10, Windows 11, and Windows Server 2016, 2019,
+2022, and 2025**, with **Python 3.12+**. These are compatibility targets, not a
+claim of native acceptance on each OS.
 
 ---
 
 ## Video demos
 
-Select a preview to open its MP4 recording.
+Select a preview to open its MP4 recording. Both use synthetic endpoint data.
 
 [![Collection health dashboard with synthetic endpoints](screenshots/wyndoze-shield-preview.png)](screenshots/demo/wyndoze-shield-30s.mp4)
 
 **[Dashboard walkthrough — 30 seconds](screenshots/demo/wyndoze-shield-30s.mp4).**
-Shows collection health and triage with synthetic endpoint data.
+Collection health and triage.
 
 [![Desktop launcher starting a synthetic local scan](screenshots/wyndoze-shield-desktop-preview.png)](screenshots/demo/wyndoze-shield-desktop-29s.mp4)
 
 **[Desktop launch, scan, and dashboard — 29 seconds](screenshots/demo/wyndoze-shield-desktop-29s.mp4).**
-Shows the native Tk launcher on macOS, a synthetic scan starting, and opening the
-local web dashboard. The desktop launcher ships in the main package.
-The recording predates the copyable password field; its displayed session
-password belongs to a terminated demo session. These previews are demonstrations,
-not native Windows acceptance evidence.
+The native Tk launcher on macOS, a synthetic scan, and the local web dashboard.
+The recording predates the copyable password field; the password shown belongs
+to a terminated demo session.
 
 ---
 
@@ -39,21 +37,20 @@ not native Windows acceptance evidence.
   rules engine** against each one, and records findings. A dark-themed dashboard
   gives you a **Triage Inbox**, a **Timeline**, an **Endpoints** registry, and a
   **Summary** report, plus exports to **CSV / Markdown / JSON / Microsoft
-  Sentinel** (NDJSON).
-- Findings carry a lifecycle: `triage → flagged / archived / suppressed`, and
-  are deduplicated per (host, rule, evidence) so recurring conditions bump a
-  `seen_count` instead of spamming the inbox.
+  Sentinel** (NDJSON). Exports always cover every stored finding, regardless of
+  dashboard filters.
+- **Findings** carry a lifecycle: `triage → flagged / archived / suppressed`.
+  Recurring identical evidence on the same host and rule increments an
+  occurrence count and preserves the analyst's decision; changed evidence opens
+  a separate finding.
+- **Collection health** travels with each report: per-collector status, item
+  counts, truncation, and safe issue categories. The Endpoints page shows that
+  coverage separately from collection age and receipt time, so a successful
+  upload is never mistaken for a complete scan.
 
-Triage uses decision cards, with low/info grouped unless filtered. Suppress asks
-for confirmation. Timeline includes recent redacted scan summaries.
-Dashboard finding lists show 50 rows per page, with host, severity, status, and
-rule filters. Finding titles open complete escaped evidence and matching-scan times. CSV, Markdown, JSON, and Sentinel
-exports include every stored finding, including archived and suppressed rows.
-Full exports are rendered in memory, so their memory use grows with the result set.
-Exports include all stored findings regardless of the current dashboard filters.
-Page numbers start at 1; invalid page or filter values return HTTP 422.
-Recurring identical evidence preserves flagged, archived, and suppressed decisions;
-changed evidence creates a separate finding for review.
+Dashboard behavior in detail (pagination, filters, decision cards, HTTP status
+codes, export sizing) is documented in [user-guide.md](user-guide.md#work-the-inbox)
+and [feature.map.md](feature.map.md#server-routes).
 
 ### What it deliberately does **not** do
 
@@ -71,26 +68,26 @@ changed evidence creates a separate finding for review.
 
 | Concern | Design |
 |---|---|
-| Agent → server auth | Bearer token (`RECON_INGEST_TOKEN`), constant-time compared |
-| Dashboard auth | HTTP Basic (`RECON_DASHBOARD_PASSWORD`); front with SSO/proxy in prod |
+| Agent → server auth | Bearer token (`RECON_INGEST_TOKEN`), constant-time compared. Unset or empty returns 401. |
+| Dashboard auth | HTTP Basic (`RECON_DASHBOARD_PASSWORD`). Unset or empty returns 401. Front with SSO/proxy in prod. |
+| Dev mode | None. The server logs a warning at startup when a secret is missing; it never opens the endpoint. |
+| Bind address | `RECON_HOST` accepts only `127.0.0.1` and `::1`. |
+| Transport | HTTPS, or HTTP only to `127.0.0.1` or `::1`. `httpx` ignores proxy env. |
 | Data at rest (deferred) | Fernet encrypted bundles. The Windows task stores the key in an ACL'd env file, not Machine environment. |
-| Stored XSS | All telemetry HTML-escaped before rendering |
+| Stored XSS | All telemetry HTML-escaped before rendering. |
 | Command execution | `subprocess` list-args only, never `shell=True`. Hard timeouts. |
 | Rule packs | Pure data via `yaml.safe_load`. Unknown severity fails the pack load. |
-| Transport | HTTPS, or HTTP only to `127.0.0.1` or `::1`. `httpx` ignores proxy env. |
 | Ingest size | Authenticate first, then reject at the first streamed chunk crossing 8 MiB, before parsing or SQLite writes. |
 | Process command lines | Off by default. Opt-in lines require a key and are sealed before storage/upload; patterns inspect at most 800 characters, and encrypted text is limited to 3000 UTF-8 bytes on a character boundary. |
+| Kill switch | `RECON_AGENT_DISABLE=1` exits the agent before collection or upload. |
 
-If `RECON_INGEST_TOKEN` or `RECON_DASHBOARD_PASSWORD` is unset or empty, that
-endpoint returns 401. The server logs a warning at startup. There is no
-unauthenticated dev mode. Set `RECON_AGENT_DISABLE=1` to exit the agent before
-collection or upload. `RECON_HOST` accepts only `127.0.0.1` and `::1`.
+### Responsible use
 
 Use the scanner only on systems you own or are authorized to assess. Inventory
 can identify people and machines through usernames, hostnames, addresses, and
-executable paths. Command lines are off by default; enabling them can capture
-embedded credentials in the encrypted text, which anyone holding the key can
-recover. Encryption is not anonymization or redaction.
+executable paths. Enabling command lines can capture embedded credentials in the
+encrypted text, which anyone holding the key can recover. Encryption is not
+anonymization or redaction.
 
 The SQLite database and plain JSON/CSV/Markdown exports are not encrypted by
 the application. Restrict access to them, use appropriate disk protection, and
@@ -101,9 +98,9 @@ credentials to public issues. See [SECURITY.md](SECURITY.md) for private reporti
 
 ## Install
 
-Server installs require FastAPI 0.143.0 or newer. Startup creates a missing database
-parent directory privately; existing directories retain operator-managed permissions.
-If Windows ACL setup fails, startup stops before creating the database.
+`pyproject.toml` is the source of truth; `requirements.txt` and
+`constraints.txt` repeat its floors and are not a lock. Server installs
+require FastAPI 0.143.0 or newer.
 
 ```bash
 # From the project root, using uv (recommended):
@@ -114,16 +111,12 @@ uv pip install -e ".[server,dev]"     # server + dev tooling
 uv pip install .
 ```
 
-On the Windows targets above, `pyproject.toml` stays the source of truth.
-The commands below use Python 3.12, the minimum supported version.
-
 ```powershell
+# Windows, using the minimum supported interpreter:
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[server,dev]"
 ```
-
-`requirements.txt` and `constraints.txt` repeat those floors. They are not a lock.
 
 Three console scripts are installed:
 
@@ -131,18 +124,13 @@ Three console scripts are installed:
 - `WynDoze-InfoScanOverload-server` — the dashboard server (uvicorn wrapper)
 - `WynDoze-InfoScanOverload-desktop` — the Tk desktop launcher (requires Tk and server dependencies)
 
+Startup creates a missing database parent directory privately; existing
+directories retain operator-managed permissions. If Windows ACL setup fails,
+startup stops before creating the database.
+
 ---
 
 ## Quick start
-
-For the desktop window on Windows, run
-`.\.venv\Scripts\WynDoze-InfoScanOverload-desktop.exe`. Choose **Start dashboard**,
-then **Run scan** to collect a local JSON report. This button does not upload
-findings; use the agent upload command below to populate the dashboard. Open `http://127.0.0.1:8000/` and sign in as `admin` using the
-window's selectable password (Ctrl+C copies it). The launcher keeps the password
-for that window only. The current-user schedule collects a local JSON report;
-it does not upload. See [the desktop guide](user-guide.md#desktop-launcher) for
-scheduling and opt-in mail settings. Server Core uses the CLI paths below.
 
 **1. Start the server** on loopback. Both secrets are required:
 
@@ -163,6 +151,17 @@ WynDoze-InfoScanOverload-agent scan --server-url http://127.0.0.1:8000/api/scans
 
 **3. Work findings** in the Triage Inbox at `/triage`.
 
+### Desktop launcher (Windows desktop with Tk)
+
+Run `.\.venv\Scripts\WynDoze-InfoScanOverload-desktop.exe`. Choose **Start
+dashboard**, then **Run scan** to collect a local JSON report. Sign in at
+`http://127.0.0.1:8000/` as `admin` with the window's selectable password
+(Ctrl+C copies it); the password lives only as long as that window. Neither
+the **Run scan** button nor the optional current-user schedule uploads; use the
+agent `scan` command above to populate the dashboard. Server Core uses the CLI.
+See [the desktop guide](user-guide.md#desktop-launcher) for scheduling and
+opt-in mail settings.
+
 ### Isolated / air-gapped machines
 
 ```bash
@@ -179,9 +178,12 @@ WynDoze-InfoScanOverload-agent replay --server-url https://recon.internal/api/sc
 Replay deletes a bundle only after HTTP 201 with an `accepted` acknowledgement,
 a positive scan ID, and the matching hostname. Redirects and malformed responses
 retain the bundle. Corrupt or unreadable bundles are reported individually while
-later valid bundles continue; any failure makes replay exit 1. Each save uses an
-exclusive filename so rapid scans cannot overwrite one another. `replay --keep`
-retains acknowledged bundles too.
+later valid bundles continue. An acknowledged bundle that cannot be deleted (a
+file lock, a read-only cache) is also reported, counted as uploaded, and left in
+place; it may upload again next time. Any upload or cleanup failure makes replay
+exit 1. Each save uses an exclusive filename so rapid scans cannot overwrite one
+another. `replay --keep` retains acknowledged bundles too. See
+[user-guide.md](user-guide.md#keep-a-bundle-when-upload-fails).
 
 ### Evaluate a report locally (no server)
 
@@ -194,25 +196,15 @@ WynDoze-InfoScanOverload-agent evaluate-local report.json          # prints find
 
 ## Configuration
 
-All configuration is environment-driven (Pydantic Settings).
-
-### Collection health and freshness
-
-New reports include bounded status, item count, duration, truncation, and safe
-issue categories for each collector. The Endpoints page shows this coverage
-separately from collection age and receipt time. Older reports show unknown
-coverage. Replaying an old bundle does not make its inventory current.
-`RECON_STALE_AFTER_HOURS` defaults to 36 (1–8760); future or timezone-less scan
-timestamps show unknown freshness. Reaching a collection cap conservatively
-marks coverage partial. Missing-service rules do not infer absence from partial
-or failed service collection; positive observations still remain reviewable.
+All configuration is environment-driven (Pydantic Settings). The full variable
+list, defaults, and limits are in [feature.map.md](feature.map.md#agent-environment).
 
 ### Agent (`RECON_AGENT_*`)
 
 | Variable | Purpose |
 |---|---|
 | `RECON_AGENT_TOKEN` | Bearer token presented to the server |
-| `RECON_AGENT_ENCRYPTION_KEY` | Fernet key for deferred/isolated bundles |
+| `RECON_AGENT_ENCRYPTION_KEY` | Fernet key for deferred/isolated bundles and opt-in command lines |
 | `RECON_AGENT_DISABLE` | Set to `1` to exit before collection or upload |
 
 ### Server (`RECON_*`)
@@ -225,16 +217,16 @@ or failed service collection; positive observations still remain reviewable.
 | `RECON_DASHBOARD_PASSWORD` | *(unset)* | Required basic-auth password. Unset returns 401. |
 | `RECON_RULES_PATH` | *(bundled)* | Override rule pack YAML |
 | `RECON_HOST` / `RECON_PORT` | `127.0.0.1` / `8000` | Bind address. Only `127.0.0.1` and `::1` are accepted. |
+| `RECON_STALE_AFTER_HOURS` | `36` (1–8760) | Age after which an endpoint's last collection is overdue. Future or timezone-less timestamps show unknown freshness. |
 
 ---
 
 ## Rules engine
 
-Rules are declarative YAML. The source and bundled pack (`windows-default`, v1.2)
-ship the same **28 rules** (CI checks the two copies byte-for-byte) across **7 rule kinds**. Command lines stay empty unless
-`--cmdline` is set, and then they are stored as Fernet tokens.
-
-Supported rule kinds:
+Rules are declarative YAML. The source pack (`rules/windows_default.yaml`) and
+the bundled copy under `core/rulepacks/` are `windows-default` v1.2 and ship
+the same **28 rules** across **7 rule kinds**; CI's invariant guard rejects any
+drift between the two.
 
 | Kind | Fires when |
 |---|---|
@@ -246,14 +238,13 @@ Supported rule kinds:
 | `missing_expected_service` | An expected service is absent |
 | `cmdline_flag` | An opted-in command line produced a matching pattern label; the server uses the label rather than decrypting text |
 
-Every rule may declare `roles:` (scope to endpoint roles) and `technique:`
-(a MITRE ATT&CK id).
-
-Rules can also declare `platforms:`; the Windows service posture rules apply
-only to Windows and those missing-service checks require a nonempty service inventory.
-Process/service presence is a review hint, not proof of malicious behavior.
-Recovery utilities and an idle Windows Update service are low-severity hints;
-short tunnel software names use whole-name matching to reduce incidental hits.
+Every rule may declare `roles:` (scope to endpoint roles), `platforms:`, and
+`technique:` (a MITRE ATT&CK id). Process and service presence is a review
+hint, not proof of malicious behavior. Recovery utilities and an idle Windows
+Update service are low-severity hints; short tunnel software names use
+whole-name matching to reduce incidental hits. Windows missing-service checks
+require a nonempty service inventory and do not infer absence from partial or
+failed service collection.
 
 Windows reports retain administrator display names and add a bounded
 `local_admin_sids` mapping. The bundled admin rule accepts account-domain RIDs
@@ -262,11 +253,14 @@ Windows reports retain administrator display names and add a bounded
 never stripped to a trusted basename. Older reports without SIDs still use
 explicit name matches; tune qualified allowlist entries for other approved accounts.
 
+Command lines stay empty unless `--cmdline` is set, and then they are stored as
+Fernet tokens.
+
 Example:
 
 ```yaml
 name: windows-default
-version: "1.0"
+version: "1.2"
 rules:
   - id: proc-credential-dumping
     kind: process_name
@@ -289,20 +283,19 @@ See [`deploy/`](deploy/):
   daily one-shot timer. Copy secrets to `/etc/recon/agent.env` (see
   `deploy/agent.env.example`).
 - **Windows:** `deploy/windows/Install-ScanneragentTask.ps1` registers a daily
-  SYSTEM task named `ScanzAgentDailyScan` when you run it. It accepts
-  `Scanz_AGENT_TOKEN` / `Scanz_AGENT_ENCRYPTION_KEY`, falling back to `RECON_AGENT_*`.
-  The aliases take precedence when both are set. It writes canonical `RECON_AGENT_*`
-  keys consumed by the agent into
-  `C:\ProgramData\WynDoze-InfoScanOverload\agent.env` and locks that file to SYSTEM and
-  Administrators. This tree does not register the task for you.
-  The dashboard database defaults to `C:\ProgramData\WynDoze-InfoScanOverload\WynDoze-InfoScanOverload.sqlite3`.
-  Use the installed agent `.exe` shim for `-PythonExe`. The daily trigger adds
-  up to 30 minutes of random delay. The UTF-8 wrapper quotes paths and passes
-  the agent exit code to Task Scheduler; ACL failures stop installation.
-
-Operator guides: [user-guide.md](user-guide.md) and [feature.map.md](feature.map.md).
+  SYSTEM task named `ScanzAgentDailyScan` when you run it; this tree never
+  registers it for you. It accepts `Scanz_AGENT_TOKEN` /
+  `Scanz_AGENT_ENCRYPTION_KEY`, falling back to `RECON_AGENT_*`; the aliases
+  take precedence when both are set. It writes canonical `RECON_AGENT_*` keys
+  into `C:\ProgramData\WynDoze-InfoScanOverload\agent.env` and locks that file
+  to SYSTEM and Administrators; ACL failures stop installation. Pass the
+  installed agent `.exe` shim as `-PythonExe`. The daily trigger adds up to
+  30 minutes of random delay, and the UTF-8 wrapper quotes paths and passes
+  the agent exit code to Task Scheduler.
 
 Put the server behind a TLS-terminating reverse proxy in production.
+
+Operator guides: [user-guide.md](user-guide.md) and [feature.map.md](feature.map.md).
 
 ---
 
@@ -316,6 +309,11 @@ mypy --platform win32 src   # Windows-only paths
 python .agents/skills/invariant-guard/check_invariants.py
 # Exercise affected paths locally; hosted CI runs full regression/platform coverage.
 ```
+
+Hosted CI runs Ruff, strict mypy on both platforms, the invariant guard, wheel
+building, Linux coverage, and Windows Server 2022/2025 regressions on Python
+3.12 through 3.15. Hosted runners do not establish Windows 10/11 or Server
+2016/2019 acceptance.
 
 Project layout:
 
