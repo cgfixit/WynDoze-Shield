@@ -197,6 +197,12 @@ valid bundles from uploading; replay exits 1 if any file fails. Use `--keep` to
 retain successful uploads. Every save gets an exclusive filename, including
 multiple scans from the same host within one second.
 
+If an acknowledged bundle cannot be deleted (for example, a Windows file lock
+or read-only cache), replay reports the cleanup failure, continues with later
+bundles, and exits 1. The uploaded count still includes that accepted report.
+The retained bundle may upload again on the next replay; resolve the permission
+or lock problem before retrying.
+
 ## Schedule a daily scan
 
 Run `deploy\windows\Install-ScanneragentTask.ps1` only when you want a SYSTEM task. Set `Scanz_AGENT_TOKEN` and `Scanz_AGENT_ENCRYPTION_KEY` in that admin session first, or use the existing `RECON_AGENT_TOKEN` and `RECON_AGENT_ENCRYPTION_KEY` inputs. The Scanz aliases take precedence; the generated env file always uses the `RECON_AGENT_*` keys read by the agent. The script writes `C:\ProgramData\WynDoze-InfoScanOverload\agent.env`, locks the file to SYSTEM and Administrators, and registers `ScanzAgentDailyScan`. It does not write Machine environment variables.
