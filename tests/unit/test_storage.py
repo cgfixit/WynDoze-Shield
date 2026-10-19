@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from wyndoze_infoscanoverload.core.models import ScanReport
+from wyndoze_infoscanoverload.core.models import CollectionHealth, ScanReport
 from wyndoze_infoscanoverload.core.rulepacks import default_rule_pack
 from wyndoze_infoscanoverload.core.rules import evaluate
 from wyndoze_infoscanoverload.server.storage import Storage
@@ -58,3 +58,38 @@ def test_wal_journal_mode(storage: Storage, tmp_db: Path) -> None:
     assert storage.list_scans() == []
     with sqlite3.connect(tmp_db) as conn:
         assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+
+def test_endpoint_names_are_newest_first_without_scan_payloads(
+    storage: Storage, backup_server_report: ScanReport, clean_report: ScanReport
+) -> None:
+    storage.record_scan(backup_server_report, [])
+    storage.record_scan(clean_report, [])
+    assert storage.list_endpoint_names() == ["WS-001", "VBRSRV01"]
+    storage.record_scan(backup_server_report, [])
+    assert storage.list_endpoint_names() == ["VBRSRV01", "WS-001"]
+
+
+def test_endpoint_health_matches_with_and_without_json_functions(
+    storage: Storage, backup_server_report: ScanReport, clean_report: ScanReport
+) -> None:
+    partial = backup_server_report.model_copy(
+        update={
+            "collection_health": {
+                "services": CollectionHealth(status="partial", issues=["limit_reached"])
+            }
+        }
+    )
+    storage.record_scan(partial, [])
+    storage.record_scan(clean_report, [])
+    extracted = storage.list_endpoints()
+    assert storage._json_functions is True
+    storage._json_functions = False
+    fallback = storage.list_endpoints()
+    assert extracted == fallback
+    by_host = {row["hostname"]: row["collection_health"] for row in extracted}
+    assert by_host["WS-001"] == {}
+    assert by_host["VBRSRV01"]["services"]["status"] == "partial"
+    assert by_host["VBRSRV01"]["services"]["issues"] == ["limit_reached"]
+    assert "raw_json" not in extracted[0]
+    assert "health_json" not in extracted[0]

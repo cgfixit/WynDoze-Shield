@@ -322,7 +322,7 @@ def _register_routes(app: FastAPI) -> None:  # noqa: C901, PLR0915 - cohesive ro
                 templates.triage_page(
                     findings[:page_size],
                     query,
-                    app.state.storage.list_endpoints(),
+                    app.state.storage.list_endpoint_names(),
                     names,
                     filters=filters,
                     page_number=page_number,

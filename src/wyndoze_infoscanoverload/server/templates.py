@@ -356,14 +356,14 @@ def _finding_navigation(
 def triage_page(
     findings: list[dict[str, Any]],
     query: DeskQuery,
-    endpoints: list[dict[str, Any]],
+    hostnames: Iterable[str],
     cmdline_rules: Mapping[str, frozenset[str]],
     *,
     filters: dict[str, str | None] | None = None,
     page_number: int = 1,
     has_next: bool = False,
 ) -> str:
-    """Render the triage desk as one card per finding."""
+    """Render the triage desk as one card per finding. ``hostnames`` feed the chips."""
     filters = filters or {
         "status": query.status,
         "hostname": query.host,
@@ -374,7 +374,7 @@ def triage_page(
     body = (
         "<h2>Triage Inbox</h2>"
         f"{_filters_form(filters, '/triage')}"
-        f"{_filter_row(query, endpoints)}"
+        f"{_filter_row(query, hostnames)}"
         f'<p class="muted">{escape(_FLAG_NOTE)}</p>'
         f"{_finding_navigation('/triage', filters, page_number, has_next=has_next)}"
         f"{_finding_stack(findings, query, cmdline_rules, return_path=next_path)}"
@@ -423,16 +423,15 @@ def _finding_stack(
     return "".join(primary) + quiet_html
 
 
-def _filter_row(query: DeskQuery, endpoints: list[dict[str, Any]]) -> str:
-    """Render severity and host chips as links."""
+def _filter_row(query: DeskQuery, hostnames: Iterable[str]) -> str:
+    """Render severity and host chips as links. Illegal hostnames get no chip."""
     severity_chips = [_filter_chip(query, None, query.host, "Any", current=query.severity is None)]
     severity_chips.extend(
         _filter_chip(query, level, query.host, level, current=query.severity == level)
         for level in _SEVERITY_CHIPS
     )
     host_chips = [_filter_chip(query, query.severity, None, "Any host", current=query.host is None)]
-    for endpoint in endpoints:
-        name = str(endpoint.get("hostname") or "")
+    for name in hostnames:
         if not legal_host(name):
             continue
         host_chips.append(
