@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+
 import pytest
 from pydantic import ValidationError
 
@@ -9,6 +12,25 @@ from wyndoze_infoscanoverload.agent.cmdline import seal_command_lines
 from wyndoze_infoscanoverload.agent.collectors import _cmdline_text
 from wyndoze_infoscanoverload.agent.crypto import generate_key
 from wyndoze_infoscanoverload.core.models import ProcessInfo, ScanReport
+
+
+def test_backtick_literal_sealing_is_bounded():
+    code = """
+from wyndoze_infoscanoverload.agent.cmdline import seal_command_lines
+from wyndoze_infoscanoverload.agent.collectors import _cmdline_text
+from wyndoze_infoscanoverload.agent.crypto import generate_key
+from wyndoze_infoscanoverload.core.models import ProcessInfo, ScanReport
+line = _cmdline_text(["powershell.exe", "-Command", '"' + "`!" * 60])
+report = ScanReport(hostname="synthetic", scan_time_utc="2026-10-19T00:00:00Z",
+                    processes=[ProcessInfo(name="powershell.exe", cmdline=line)])
+seal_command_lines(report, generate_key())
+assert report.processes[0].cmdline != line
+assert not report.cmdline_flags
+"""
+    # A malformed literal used to backtrack exponentially before it could be sealed.
+    subprocess.run(  # noqa: S603 - fixed Python program, no shell or live command execution
+        [sys.executable, "-c", code], check=True, capture_output=True, text=True, timeout=3
+    )
 
 
 def _seal(*processes: ProcessInfo) -> ScanReport:

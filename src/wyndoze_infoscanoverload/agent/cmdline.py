@@ -51,7 +51,7 @@ def _powershell_body(command_line: str) -> str | None:
     body = " ".join(parts[command_at + 1 :]).strip()
     if len(body) > 1 and body[0] == body[-1] == '"':
         body = body[1:-1]
-    body = re.sub(r"'(?:''|[^'])*'|\"(?:`.|[^\"])*\"", "", body)
+    body = re.sub(r"'(?:''|[^'])*'|\"(?:`.|[^\"`])*\"", "", body)
     body = re.sub(r"(?s)<#.*?#>", "", body)
     return re.sub(r"(?m)#.*$", "", body)
 
