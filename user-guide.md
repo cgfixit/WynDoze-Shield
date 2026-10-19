@@ -36,6 +36,9 @@ command below to populate the dashboard. Open
 `http://127.0.0.1:8000/` in your browser. Sign in as `admin`; select the password
 in the read-only field and press Ctrl+C, then paste it into the browser. Each
 window generates new credentials. **Stop dashboard** stops its server process.
+The launcher sets its child dashboard username to `admin`, matching the window,
+even when the shell has `RECON_DASHBOARD_USER` set to another name. A server
+started directly from the CLI still honors that environment setting.
 
 **Create scheduled task** registers `WynDoze-InfoScanOverload-scan` for the current
 user at 02:30 with the selected cadence. It collects to

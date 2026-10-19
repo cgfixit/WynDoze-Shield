@@ -237,6 +237,7 @@ def server_env(
     env["RECON_HOST"] = "127.0.0.1"
     env["RECON_PORT"] = port
     env["RECON_INGEST_TOKEN"] = token
+    env["RECON_DASHBOARD_USER"] = "admin"
     env["RECON_DASHBOARD_PASSWORD"] = password
     env.pop("RECON_ALERTS", None)
     for key in (
