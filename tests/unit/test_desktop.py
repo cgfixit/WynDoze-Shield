@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from wyndoze_infoscanoverload.desktop import (
     ABOUT,
@@ -24,6 +25,8 @@ from wyndoze_infoscanoverload.desktop import (
     tool_path,
     wait_until_healthy,
 )
+from wyndoze_infoscanoverload.server.app import create_app
+from wyndoze_infoscanoverload.server.config import ServerConfig
 
 # ``start`` runs the server path with no arguments, so a stand-in child must do its
 # work at interpreter start-up. ``sitecustomize`` on PYTHONPATH gives that hook.
@@ -182,3 +185,16 @@ def test_tool_path_stays_with_the_virtual_environment(tmp_path, monkeypatch):
     tool = scripts / "WynDoze-InfoScanOverload-server.exe"
     tool.touch()
     assert tool_path("WynDoze-InfoScanOverload-server") == tool
+
+
+def test_desktop_login_uses_the_displayed_username(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("RECON_DASHBOARD_USER", "inherited-operator")
+    env = server_env(token="synthetic", password="window-password", port="8765", alerts=None)  # noqa: S106
+    for name, value in env.items():
+        if name.startswith("RECON_"):
+            monkeypatch.setenv(name, value)
+    client = TestClient(create_app(ServerConfig()))
+    assert client.get("/", auth=("admin", "window-password")).status_code == 200
+    assert client.get("/", auth=("inherited-operator", "window-password")).status_code == 401
+    assert client.get("/", auth=("admin", "wrong-password")).status_code == 401
