@@ -293,7 +293,9 @@ class Storage:
     def list_endpoint_names(self) -> list[str]:
         """Return hostnames, most recently seen first, without reading any scan."""
         with self._connect() as conn:
-            rows = conn.execute("SELECT hostname FROM endpoints ORDER BY last_seen_utc DESC")
+            rows = conn.execute(
+                "SELECT hostname FROM endpoints ORDER BY last_seen_utc DESC, hostname"
+            )
             return [str(row["hostname"]) for row in rows]
 
     def _supports_json_functions(self, conn: sqlite3.Connection) -> bool:

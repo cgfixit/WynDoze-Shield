@@ -10,6 +10,7 @@ import pytest
 from wyndoze_infoscanoverload.core.models import CollectionHealth, ScanReport
 from wyndoze_infoscanoverload.core.rulepacks import default_rule_pack
 from wyndoze_infoscanoverload.core.rules import evaluate
+from wyndoze_infoscanoverload.server import storage as storage_module
 from wyndoze_infoscanoverload.server.storage import Storage
 
 
@@ -61,11 +62,35 @@ def test_wal_journal_mode(storage: Storage, tmp_db: Path) -> None:
 
 
 def test_endpoint_names_are_newest_first_without_scan_payloads(
-    storage: Storage, backup_server_report: ScanReport, clean_report: ScanReport
+    storage: Storage,
+    backup_server_report: ScanReport,
+    clean_report: ScanReport,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Windows clocks can stamp two back-to-back scans identically; drive the clock.
+    clock = iter(
+        (
+            "2026-10-19T10:00:00+00:00",
+            "2026-10-19T10:00:01+00:00",
+            "2026-10-19T10:00:02+00:00",
+        )
+    )
+    monkeypatch.setattr(storage_module, "utc_now_iso", lambda: next(clock))
     storage.record_scan(backup_server_report, [])
     storage.record_scan(clean_report, [])
     assert storage.list_endpoint_names() == ["WS-001", "VBRSRV01"]
+    storage.record_scan(backup_server_report, [])
+    assert storage.list_endpoint_names() == ["VBRSRV01", "WS-001"]
+
+
+def test_endpoint_names_break_timestamp_ties_by_hostname(
+    storage: Storage,
+    backup_server_report: ScanReport,
+    clean_report: ScanReport,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(storage_module, "utc_now_iso", lambda: "2026-10-19T10:00:00+00:00")
+    storage.record_scan(clean_report, [])
     storage.record_scan(backup_server_report, [])
     assert storage.list_endpoint_names() == ["VBRSRV01", "WS-001"]
 
@@ -82,14 +107,13 @@ def test_endpoint_health_matches_with_and_without_json_functions(
     )
     storage.record_scan(partial, [])
     storage.record_scan(clean_report, [])
-    extracted = storage.list_endpoints()
+    extracted = sorted(storage.list_endpoints(), key=lambda row: row["hostname"])
     assert storage._json_functions is True
     storage._json_functions = False
-    fallback = storage.list_endpoints()
+    fallback = sorted(storage.list_endpoints(), key=lambda row: row["hostname"])
     assert extracted == fallback
     by_host = {row["hostname"]: row["collection_health"] for row in extracted}
     assert by_host["WS-001"] == {}
     assert by_host["VBRSRV01"]["services"]["status"] == "partial"
     assert by_host["VBRSRV01"]["services"]["issues"] == ["limit_reached"]
-    assert "raw_json" not in extracted[0]
-    assert "health_json" not in extracted[0]
+    assert all("raw_json" not in row and "health_json" not in row for row in extracted)
