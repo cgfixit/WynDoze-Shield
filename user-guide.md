@@ -42,6 +42,10 @@ user at 02:30 with the selected cadence. It collects to
 `%LOCALAPPDATA%\WynDoze-InfoScanOverload\scheduled-scan.json` without uploading or
 sending mail. That file contains unencrypted inventory. Restrict and remove it
 according to your retention policy. The SYSTEM task described below is separate.
+Registration runs in the background with a 30-second timeout. The button stays
+disabled while it runs; timeout or launch failures appear in the window. After
+a timeout, check Task Scheduler before retrying because the task may have been
+created. Task creation is disabled on macOS and other non-Windows systems.
 
 Email alerts are off by default. Before starting the dashboard, enable the mail
 checkbox and supply host, port, username, password, and recipient. SMTP uses

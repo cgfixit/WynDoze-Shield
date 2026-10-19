@@ -15,6 +15,7 @@ from wyndoze_infoscanoverload.desktop import (
     AlertMail,
     DashboardProcess,
     documentation_message,
+    register_scheduled_task,
     scan_argv,
     schtasks_create_argv,
     schtasks_delete_argv,
@@ -140,6 +141,36 @@ def test_delete_argv() -> None:
         "WynDoze-InfoScanOverload-verify",
         "/F",
     ]
+
+
+@pytest.mark.parametrize(
+    ("outcome", "message"),
+    [
+        (0, "Registered WynDoze-InfoScanOverload-scan (weekly at 02:30)"),
+        (1, "schtasks could not register the task."),
+        (FileNotFoundError(), "Could not run schtasks: FileNotFoundError."),
+        (PermissionError(), "Could not run schtasks: PermissionError."),
+        (subprocess.TimeoutExpired("schtasks", 30), "Check Task Scheduler before retrying."),
+    ],
+)
+def test_task_registration_handles_completion_and_failures(tmp_path, monkeypatch, outcome, message):
+    def run(argv, **kwargs):
+        assert argv == schtasks_create_argv(
+            task_command(tmp_path / "agent with spaces.exe", "proxy", tmp_path / "out.json"),
+            "weekly",
+        )
+        assert kwargs["timeout"] == 30
+        assert kwargs["stdout"] == subprocess.DEVNULL
+        assert kwargs["stderr"] == subprocess.DEVNULL
+        if isinstance(outcome, Exception):
+            raise outcome
+        return subprocess.CompletedProcess(argv, outcome)
+
+    monkeypatch.setattr("wyndoze_infoscanoverload.desktop.subprocess.run", run)
+    result = register_scheduled_task(
+        tmp_path / "agent with spaces.exe", "proxy", tmp_path / "out.json", "weekly"
+    )
+    assert message in result
 
 
 def test_missing_pdf_does_not_invent_one(tmp_path: Path) -> None:
