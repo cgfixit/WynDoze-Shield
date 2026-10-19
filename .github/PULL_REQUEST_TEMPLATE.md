@@ -93,7 +93,7 @@ State the maintainer outcome in concrete terms. Do not market a capability or cl
 - For rule pack or deploy changes: what happens on an older agent report, a localized Windows install, Server Core, or a 32-bit registry view?
 - How will you (or future maintainers) detect drift from the intended behavior?
 
-Name residual risk after the checks you actually ran. Include failed or skipped commands, their exit codes, and why you skipped them. Say which invariants the diff touches. Detect drift by re-running the quality bar and `check_invariants.py` on the same head SHA.
+Name residual risk after the checks you actually ran. Include failed or skipped commands, their exit codes, and why you skipped them. Say which invariants the diff touches. Detect drift by re-running `.github/scripts/check_pr_template.py` on the body and the quality bar on the same head SHA.
 
 ---
 
@@ -111,6 +111,7 @@ _Put an `x` in the boxes that apply. You can fill these out after creating the P
 - [ ] For large or complex changes: before/after invariant notes + `pytest` evidence is included in "Further comments" or linked
 - [ ] If `check_invariants.py` changed: `bash .agents/skills/invariant-guard/verify.sh` was run and the planted violations still fail
 - [ ] If a workflow changed: `actionlint` was run and the invoked commands were inspected
+- [ ] PR body was checked with `python .github/scripts/check_pr_template.py --title "<title>" --body-file <body.md>` before opening (CI re-runs it on every edit)
 
 Mark a box only after that command exits 0 on the head SHA you will push. A skipped row stays unchecked. The quality-bar row is not met by a green subset. Invariants touched, residual risk, and rollback belong in Proposed changes, Risks, and Further comments.
 
@@ -162,7 +163,7 @@ Merge the foundation first. If a later PR was written against an older base, reb
 ```
 
 ## ELI5
-_Required on every PR, and it must stay the **last heading** in the body. The body's last non-blank line is the stamp below, starting with 🤖 (e.g. `🤖 Last updated: 2026-10-14 15:05 ET`); an automated tool attribution footer may follow it, nothing else. Refresh the stamp whenever you edit the body._
+_Required on every PR, and it must stay the **last heading** in the body (`pr-template-check.yml` enforces this, the required headings, the title prefix, and the stamp). The body's last non-blank line is the stamp below, starting with 🤖 (e.g. `🤖 Last updated: 2026-10-14 15:05 ET`); an automated tool attribution footer may follow it, nothing else. Refresh the stamp whenever you edit the body._
 
 Explain the **whole** diff against `main`, not just the first commit. Re-read it whenever a later commit changes what the PR does. Plain words, no jargon you would not say out loud, but keep the specifics:
 Write for the operator: plain but technical, nothing glossed. Cover the whole branch diff against main, later commits included. Say what changed and why, naming files and functions; what could break and where to look; what was run versus only reasoned. Mark guesses. Do not market a feature or soften a gate. No heading after this one. Plain words, no jargon you would not say out loud, but keep the specifics on what is changing, what it touches, what it adds, potential or expected risk, etc .. (Think: McLuhan's tetrad: "What does this Pr's changes enhance? What does this Pr's changes make obsolete? What does this Pr's changes retrieve that had been obsolesced earlier? What does this Pr's changes reverse or flip into when pushed to extremes?"):
