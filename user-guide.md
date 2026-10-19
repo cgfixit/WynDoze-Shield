@@ -216,4 +216,4 @@ allowed to start on battery.
 
 The synthetic installer check resets its exit status only after all assertions
 pass, including the expected child exit and ACL failure probes. A failed assertion
-still fails the PowerShell workflow. It does not register a real task or change ACLs.
+still fails the CI Windows job that runs it. It does not register a real task or change ACLs.

@@ -98,5 +98,11 @@ jobs:
               exit 1
             }
           }
+      - name: Verify the task installer contract without registering a task
+        # Synthetic fixture: mocks task registration and icacls, checks the
+        # native ScheduledTasks parameter metadata, registers nothing.
+        if: matrix.python == '3.12'
+        shell: powershell
+        run: ./tests/windows/Test-TaskInstaller.ps1
       - name: Run regression checks
         run: python -m pytest -q --basetemp "$env:RUNNER_TEMP/wyndoze-pytest"
