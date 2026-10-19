@@ -131,6 +131,25 @@ def task_command(agent: Path, role: str, output: Path) -> str:
     return f'"{argv[0]}" scan --no-upload --role {role} --output-json "{argv[-1]}"'
 
 
+def register_scheduled_task(agent: Path, role: str, output: Path, cadence: str) -> str:
+    """Register one current-user task with a bounded wait and a safe status message."""
+    argv = schtasks_create_argv(task_command(agent, role, output), cadence)
+    try:
+        completed = subprocess.run(  # noqa: S603 - validated local task argv, no shell
+            argv, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30
+        )
+    except subprocess.TimeoutExpired:
+        return "Task registration timed out. Check Task Scheduler before retrying."
+    except OSError as exc:
+        return f"Could not run schtasks: {type(exc).__name__}."
+    if completed.returncode != 0:
+        return "schtasks could not register the task."
+    return (
+        f"Registered {TASK_NAME} ({cadence} at 02:30). "
+        "The task collects locally and does not upload or send mail."
+    )
+
+
 def status_from_server_log(text: str, *, alive: bool, healthy: bool) -> str:
     """Turn a server log into the window status. Healthy wins over a stale error."""
     if healthy:
@@ -394,16 +413,19 @@ def main() -> None:  # noqa: C901, PLR0915 - one window, one place
 
     def register_task() -> None:
         agent = tool_path("WynDoze-InfoScanOverload-agent")
-        command = task_command(agent, role.get(), scan_file)
-        argv = schtasks_create_argv(command, cadence.get())
-        completed = subprocess.run(argv, check=False, capture_output=True, text=True)  # noqa: S603
-        if completed.returncode == 0:
-            set_status(
-                f"Registered {TASK_NAME} ({cadence.get()} at 02:30). "
-                "The task collects locally and does not upload or send mail."
-            )
-            return
-        set_status("schtasks could not register the task.")
+        selected_role, selected_cadence = role.get(), cadence.get()
+        task_button.state(["disabled"])
+        set_status("Registering the scheduled task.")
+
+        def finish(message: str) -> None:
+            task_button.state(["!disabled"])
+            set_status(message)
+
+        def register() -> None:
+            message = register_scheduled_task(agent, selected_role, scan_file, selected_cadence)
+            window.after(0, finish, message)
+
+        threading.Thread(target=register, daemon=True).start()
 
     buttons = ttk.Frame(frame)
     buttons.pack(anchor="w", pady=8)
@@ -418,11 +440,14 @@ def main() -> None:  # noqa: C901, PLR0915 - one window, one place
 
     sched = ttk.Frame(frame)
     sched.pack(anchor="w", pady=8)
-    ttk.Label(sched, text="Scheduled collect").pack(side="left")
+    ttk.Label(sched, text="Scheduled collect (Windows)").pack(side="left")
     ttk.Combobox(sched, textvariable=cadence, values=CADENCES, state="readonly", width=12).pack(
         side="left", padx=8
     )
-    ttk.Button(sched, text="Create scheduled task", command=register_task).pack(side="left")
+    task_button = ttk.Button(sched, text="Create scheduled task", command=register_task)
+    task_button.pack(side="left")
+    if sys.platform != "win32":
+        task_button.state(["disabled"])
 
     ttk.Checkbutton(
         frame,
