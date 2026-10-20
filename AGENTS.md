@@ -39,7 +39,7 @@
   of agent/server/desktop/alerts; agent and server never import each other.
 - Version comes from `_version.py`. Pydantic v2 route/model annotations remain
   runtime imports. Preserve `.gitattributes` line endings, including CRLF scripts.
-- For optimizer work, read `.agents/skills/wyndozescan-optimizer/SKILL.md`.
+- For optimizer work, read `.agents/skills/wynshield-optimizer/SKILL.md`.
   This is the single manual optimizer workflow for every agent.
 
 ## Boundaries to preserve
