@@ -235,8 +235,12 @@ def _severity_count_card(level: str, count: int) -> str:
 
 
 def cmdline_rule_names(rules: Iterable[Rule]) -> dict[str, frozenset[str]]:
-    """Index loaded cmdline_flag rules by id. Names are already lowercased."""
-    return {rule.rule_id: frozenset(rule.names) for rule in rules if rule.kind == "cmdline_flag"}
+    """Index the labels allowed by each loaded command-line rule."""
+    return {
+        rule.rule_id: frozenset((*rule.names, *rule.all_flags, *rule.any_flags))
+        for rule in rules
+        if rule.kind == "cmdline_flag"
+    }
 
 
 def evidence_label(

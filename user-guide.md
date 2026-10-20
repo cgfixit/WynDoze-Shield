@@ -107,7 +107,7 @@ those files and backups, decide how long to keep them, and do not post real
 inventory or credentials in public issues. Use [private security reporting](SECURITY.md)
 for suspected vulnerabilities.
 
-`--cmdline` also needs `RECON_AGENT_ENCRYPTION_KEY`. The agent checks the line in memory, keeps a short pattern name such as `encoded-powershell`, and replaces the line with a Fernet token before the report is written or uploaded. The dashboard does not need the key to score that pattern name. Anyone who has the key can decrypt the token. Keep the key off the server if you do not want the server to be able to read those lines.
+`--cmdline` also needs `RECON_AGENT_ENCRYPTION_KEY`. The agent checks the line in memory, keeps bounded pattern names on the process row alongside PID and creation time, and replaces the line with a Fernet token before the report is written or uploaded. The dashboard does not need the key to score those names. The host-level union is retained for older consumers; combined rules require labels on the same process row. Anyone who has the key can decrypt the token. Keep the key off the server if you do not want the server to be able to read those lines.
 
 Command lines may include passwords or tokens supplied to other programs.
 Sealing encrypts the retained text; it does not redact embedded secrets. Leave
@@ -137,7 +137,17 @@ ASGI chunk, concurrent requests, and valid JSON parsing also consume memory.
 
 ## Work the inbox
 
-The installed v1.2 rule pack matches the source copy and contains 28 rules.
+ProcDump/ntdsutil presence and PowerShell bypass/encoding are advisory. Five contextual
+rules cover sensitive-target dumping, PowerShell download/execution, recovery deletion,
+event-log clearing and autorun writes. Combined rules require one process row; old
+host unions cannot establish attribution. Direct syntax is bounded: no shell wrappers,
+script-file reads, decoded payloads, PID-only dumps or implicit PowerShell commands.
+Identical evidence preserves analyst decisions; new rule/evidence identities create
+fresh triage records. Review legitimate diagnostics and maintenance before acting.
+Synthetic Windows command fixtures do not establish production precision; compare
+alerts per endpoint-day and analyst-confirmed precision before production promotion.
+
+The installed v1.3 rule pack matches the source copy.
 Both files must be updated together; a regression check rejects policy drift.
 Treat tool and service presence as context for review, not a malware verdict.
 Windows-only missing-service hints require a nonempty service inventory.

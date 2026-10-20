@@ -31,11 +31,13 @@ def public_scan_facts(
     except (ValidationError, json.JSONDecodeError):
         raise UnreadableScan from None
     sealed = sum(1 for proc in report.processes if proc.cmdline is not None)
-    patterns = [
-        flag.strip().lower()
-        for flag in report.cmdline_flags
-        if flag.strip().lower() in allowed_flags
+    flags = [
+        *report.cmdline_flags,
+        *(flag for proc in report.processes for flag in proc.cmdline_flags),
     ]
+    patterns = sorted(
+        {flag.strip().lower() for flag in flags if flag.strip().lower() in allowed_flags}
+    )
     return {
         "hostname": report.hostname,
         "fqdn": report.fqdn or "",

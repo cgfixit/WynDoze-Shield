@@ -1,26 +1,6 @@
-# WynDoze-InfoScanOverload default rule pack.
-# Reviewed v1.2. Heuristics mapped to MITRE ATT&CK; tuned against the engine
-# in core/rules.py (exact process-name match, service/software substring match).
-#
-# Each rule is pure data. Supported kinds: listening_port, process_name,
-# service_present, software_present, local_admin_unexpected,
-# missing_expected_service, cmdline_flag. Optional `roles` scopes a rule;
-# `technique` maps to MITRE ATT&CK.
-#
-# v1.2 also adds platform scoping, canonical administrator RIDs, and advisory
-# calibration for ordinary recovery/update tools and short tunnel names.
-# Change log from v1.0:
-#   - Added SMB/NetBIOS/SMB-over-IP and MSSQL listener checks (lateral movement).
-#   - Added shadow-copy deletion and event-log clearing process checks (T1490/T1070).
-#   - Added RMM/stealth tunnel software checks (ScreenConnect etc. already present).
-#   - Added stopped-Defender/MDE and stopped-Windows-Update service checks.
-#   - Added Print Spooler check scoped to server roles (PrintNightmare class).
-#   - Added missing-expected-service posture checks (Defender, event log, VSS).
-#   - Removed `lsass.exe.dmp` from process names: exact-name matching can never
-#     fire on a .dmp file; dump artifacts are covered by cmdline `credential-hive`.
-
+# WynDoze-InfoScanOverload default rule pack v1.3.
 name: windows-default
-version: "1.2"
+version: "1.3"
 
 rules:
   # --- Exposed remote-access / lateral-movement surface ----------------------
@@ -107,8 +87,6 @@ rules:
     technique: T1003
     names:
       - mimikatz.exe
-      - procdump.exe
-      - ntdsutil.exe
       - lazagne.exe
       - rubeus.exe
       - sharphound.exe
@@ -116,6 +94,14 @@ rules:
       - wce.exe
       - gsecdump.exe
       - nanodump.exe
+
+  - id: proc-diagnostic-admin
+    title: Diagnostic or directory administration tool observed
+    kind: process_name
+    severity: low
+    category: administration
+    message: ProcDump or ntdsutil is running. Tool presence alone does not establish credential dumping; review operation and target context.
+    names: [procdump.exe, procdump64.exe, procdump64a.exe, ntdsutil.exe]
 
   - id: proc-malware-adware
     title: Known malware, miner, or adware process observed
@@ -251,10 +237,10 @@ rules:
       - searchprotect
 
   - id: sw-potentially-suspicious
-    title: Potentially suspicious software is installed
+    title: Administration or dual-use software is installed
     kind: software_present
     severity: low
-    category: adware
+    category: administration
     message: This software is common for administration or file transfer and is also commonly used by attackers. It is not malware by itself.
     substrings:
       - utorrent
@@ -337,26 +323,59 @@ rules:
     substrings:
       - spooler
 
-  # --- Command-line heuristics (opt-in, sealed) ---------------------------------
-  # NOTE: flags referenced here must exist in agent/cmdline.py::_FLAG_PATTERNS.
-  # New command-line heuristics require an agent code change first.
+  # --- Command-line patterns (opt-in, sealed; combinations require one row) -----
   - id: cmd-suspicious-line
-    title: Suspicious command-line pattern observed
+    title: Command-line supporting signal observed
+    kind: cmdline_flag
+    severity: low
+    category: execution
+    message: An opted-in command line matched an administration or execution pattern. This is supporting evidence, not proof of malicious behavior; the line is sealed.
+    names: [encoded-powershell, invoke-expression, credential-hive, download-cradle, execution-policy-bypass, hidden-window, certutil-download, bitsadmin-transfer, startup-run-key]
+
+  - id: cmd-credential-dump
+    title: Potential sensitive-target dumping operation
+    kind: cmdline_flag
+    severity: high
+    category: credential_access
+    message: One invocation matched both a dump operation and a sensitive target. Review authorization and purpose; diagnostic tools can be legitimate.
+    technique: T1003
+    all_flags: [dump-operation, sensitive-target]
+
+  - id: cmd-download-execute
+    title: PowerShell download and execution indicators
     kind: cmdline_flag
     severity: high
     category: execution
-    message: An opted-in command line matched a high-signal pattern. The line itself is not stored in clear text.
+    message: One PowerShell invocation contains download and expression-execution indicators. Verify whether this is an authorized installer or workflow.
     technique: T1059.001
-    names:
-      - encoded-powershell
-      - invoke-expression
-      - credential-hive
-      - download-cradle
-      - execution-policy-bypass
-      - hidden-window
-      - certutil-download
-      - bitsadmin-transfer
-      - startup-run-key
+    all_flags: [download-cradle, invoke-expression]
+
+  - id: cmd-recovery-inhibition
+    title: Destructive recovery administration operation
+    kind: cmdline_flag
+    severity: high
+    category: defense_evasion
+    message: A recognized utility requested a destructive recovery operation. Verify against authorized maintenance before treating it as malicious.
+    technique: T1490
+    any_flags: [recovery-delete]
+
+  - id: cmd-eventlog-clear
+    title: Event-log clear operation
+    kind: cmdline_flag
+    severity: high
+    category: defense_evasion
+    message: A command requested clearing a named event log. Verify maintenance authorization and logging policy.
+    technique: T1070.001
+    any_flags: [eventlog-clear]
+
+  - id: cmd-autorun-modification
+    title: Autorun registry modification
+    kind: cmdline_flag
+    severity: medium
+    category: persistence
+    message: A registry write operation targeted an autorun location. Verify whether an approved installer or administrator made this change.
+    technique: T1547.001
+    any_flags: [autorun-write]
 
   # --- Posture: expected services missing ---------------------------------------
   - id: svc-defender-missing

@@ -12,11 +12,18 @@ Reference for the working tree at version 1.0.0. Behavior below matches the code
 
 Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and `version`.
 
-The source and installed Windows pack are identical v1.2 with 28 rules.
+The source and installed Windows pack are identical v1.3.
 Windows admin display names retain a bounded `local_admin_sids` mapping;
 the admin policy recognizes account-domain RIDs 500/512, rather than trusting
 an arbitrary qualified account's basename. Windows service posture rules are
 platform-scoped and empty service inventories do not prove a missing service.
+
+Command-line `all_flags`/`any_flags` conditions run within one process row; legacy
+`names` rules retain host-union behavior. Five contextual rules cover sensitive-target
+dumping, PowerShell download/execution, recovery deletion, event-log clearing and
+autorun writes. Matching covers direct supported syntax, not arbitrary shell/script
+semantics. Command text stays opt-in and sealed; labels are bounded to 32 per row
+alongside PID/create_time. Six benign Windows profiles test command calibration.
 
 ## Server routes
 
