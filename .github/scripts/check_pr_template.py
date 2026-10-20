@@ -35,17 +35,16 @@ STAMP_RE = re.compile(r"^🤖 Last updated: \d{4}-\d{2}-\d{2} \d{2}:\d{2} ET$")
 STAMP_PLACEHOLDER = "🤖 Last updated: YYYY-MM-DD HH:MM ET"
 # Lines an automated PR tool may append after the stamp, whichever tool it is:
 # a rule, an optionally italic or robot-prefixed "Generated/Created/Authored by|with"
-# line, a bare link, or one Cursor badge div of cursor.com image links.
-# Nothing else may follow the stamp.
+# line, or a bare link. A Cursor badge div is checked separately, without a
+# nested regex. Nothing else may follow the stamp.
 FOOTER_RES = (
     re.compile(r"^---$"),
     re.compile(r"^_?(🤖 )?(Generated|Created|Authored) (by|with) .+?_?$"),
     re.compile(r"^https?://\S+$"),
-    re.compile(
-        r'^<div>(?:<a href="https://cursor\.com/[^"]*">'
-        r"<picture>(?:(?!</picture>).)*</picture></a>&nbsp;)+</div>$"
-    ),
 )
+_CURSOR_HREF = '<a href="https://cursor.com/'
+_CURSOR_PICTURE = "><picture>"
+_CURSOR_ANCHOR_END = "</picture></a>"
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 CHECKED_BOX_RE = re.compile(r"^\s*[-*]\s+\[[xX]\]\s+\S")
 SHA_RE = re.compile(r"\b[0-9a-f]{40}\b")
@@ -101,9 +100,36 @@ def sections(lines: list[str]) -> dict[str, list[str]]:
     return found
 
 
+def _is_cursor_anchor(piece: str) -> bool:
+    """Return True for one cursor.com anchor wrapping a single picture element."""
+    if not piece.startswith(_CURSOR_HREF) or not piece.endswith(_CURSOR_ANCHOR_END):
+        return False
+    href, quote, rest = piece[len(_CURSOR_HREF) :].partition('"')
+    if quote != '"' or not href or any(char in href for char in " <>"):
+        return False
+    if not rest.startswith(_CURSOR_PICTURE):
+        return False
+    picture = rest[len(_CURSOR_PICTURE) : -len(_CURSOR_ANCHOR_END)]
+    return bool(picture) and all(
+        token not in picture for token in ("<picture>", "</picture>", "</a>", "</div>")
+    )
+
+
+def _is_cursor_badge(line: str) -> bool:
+    """Return True for one div of cursor.com picture links joined by ``&nbsp;``."""
+    if not line.startswith("<div>") or not line.endswith("</div>"):
+        return False
+    inner = line[len("<div>") : -len("</div>")]
+    if not inner.endswith("&nbsp;"):
+        return False
+    pieces = inner[: -len("&nbsp;")].split("&nbsp;")
+    return bool(pieces) and all(piece and _is_cursor_anchor(piece) for piece in pieces)
+
+
 def is_footer(line: str) -> bool:
     """Return True for a line a hosting tool may append after the stamp."""
-    return any(pattern.match(line.strip()) for pattern in FOOTER_RES)
+    stripped = line.strip()
+    return _is_cursor_badge(stripped) or any(pattern.match(stripped) for pattern in FOOTER_RES)
 
 
 def check_title(title: str) -> list[str]:
