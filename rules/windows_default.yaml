@@ -1,6 +1,6 @@
-# WynDoze-InfoScanOverload default rule pack v1.4.
+# WynDoze-InfoScanOverload default rule pack v1.5.
 name: windows-default
-version: "1.4"
+version: "1.5"
 
 rules:
   # --- Listening sockets; reachability is not established ----------------------
@@ -281,7 +281,7 @@ rules:
     message: Remote Registry or Telnet is running. That exposes the host to lateral movement.
     technique: T1021
     states: [running]
-    substrings:
+    names:
       - remoteregistry
       - tlntsvr
 
@@ -289,12 +289,11 @@ rules:
     platforms: [windows]
     title: Endpoint protection service is not running
     kind: service_present
-    severity: high
-    category: defense_evasion
-    message: Windows Defender (WinDefend) or Defender for Endpoint (Sense) exists but is stopped. AV tampering is a common precursor to ransomware.
-    technique: T1562.001
+    severity: low
+    category: posture
+    message: WinDefend or Sense exists but is stopped. Active, passive, disabled, and third-party protection configurations vary; check configured policy and protection state. Service state alone does not establish tampering.
     states: [stopped]
-    substrings:
+    names:
       - windefend
       - sense
 
@@ -306,7 +305,7 @@ rules:
     category: posture
     message: Windows Update is stopped. Trigger-start services may normally be idle; verify update policy and patch status before treating this as a problem.
     states: [stopped]
-    substrings:
+    names:
       - wuauserv
 
   - id: svc-spooler-on-server
@@ -319,7 +318,7 @@ rules:
     technique: T1068
     roles: [backup_server, repository, domain_controller]
     states: [running]
-    substrings:
+    names:
       - spooler
 
   # --- Command-line patterns (opt-in, sealed; combinations require one row) -----
@@ -381,11 +380,10 @@ rules:
     platforms: [windows]
     title: Windows Defender service not present
     kind: missing_expected_service
-    severity: medium
+    severity: low
     category: posture
     message: No Windows Defender service was found on the host. AV may be replaced by a third party (verify) or absent entirely.
-    technique: T1562.001
-    substrings:
+    names:
       - windefend
 
   - id: svc-eventlog-missing
@@ -396,7 +394,7 @@ rules:
     category: posture
     message: The Windows Event Log (EventLog) service was not found. Without event logging, detection and forensics are blind.
     technique: T1562.002
-    substrings:
+    names:
       - eventlog
 
   - id: svc-vss-missing-on-backup
@@ -408,7 +406,7 @@ rules:
     message: The Volume Shadow Copy service was not found on a backup-role host. Snapshots/backups may not be functioning.
     technique: T1490
     roles: [backup_server, repository]
-    substrings:
+    names:
       - vss
 
   # --- Accounts -------------------------------------------------------------------

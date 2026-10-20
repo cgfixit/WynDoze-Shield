@@ -147,10 +147,14 @@ fresh triage records. Review legitimate diagnostics and maintenance before actin
 Synthetic Windows command fixtures do not establish production precision; compare
 alerts per endpoint-day and analyst-confirmed precision before production promotion.
 
-The installed v1.4 rule pack matches the source copy.
+The installed v1.5 rule pack matches the source copy.
 Both files must be updated together; a regression check rejects policy drift.
 Treat tool and service presence as context for review, not a malware verdict.
 Windows-only missing-service hints require a nonempty service inventory.
+Windows component services match exact names, case-insensitively. Product/custom
+rules may still declare explicit substrings. Stopped/missing WinDefend or Sense is
+advisory: check protection policy and active/passive/third-party state rather than
+inferring tampering. Legacy empty/incomplete-inventory behavior remains unchanged.
 
 Local administrator names are accompanied by SIDs. Built-in Administrator
 (RID 500) and Domain Admins (RID 512) are recognized by account-domain SID,
