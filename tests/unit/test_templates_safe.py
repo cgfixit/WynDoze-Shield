@@ -41,7 +41,7 @@ def test_card_uses_the_helpers() -> None:
     assert "port 3389 listening" in page
 
 
-def _card(severity: str, title: str, *, finding_id: int = 1, hostname: str = "VBRSRV01") -> dict:
+def _card(severity: str, title: str, *, finding_id: int = 1, hostname: str = "BACKUPSRV01") -> dict:
     return {
         "id": finding_id,
         "severity": severity,
