@@ -90,7 +90,9 @@ selectable read-only field. Its current-user `WynDoze-InfoScanOverload-scan` tas
 collects locally without upload. The separate SYSTEM installer is
 `deploy/windows/Install-ScanneragentTask.ps1`, default task `ScanzAgentDailyScan`.
 It accepts Scanz credential aliases (preferred) or RECON inputs and writes
-canonical `RECON_AGENT_*` keys. Systemd uses those same canonical keys.
+canonical `RECON_AGENT_*` keys. Its task action runs `powershell.exe` with
+`-ExecutionPolicy RemoteSigned` (process scope; Group Policy still applies).
+Systemd uses those same canonical keys.
 
 `RECON_ALERTS=1` enables SMTP only with `RECON_SMTP_HOST`, `RECON_SMTP_USER`,
 `RECON_SMTP_PASSWORD`, and `RECON_ALERT_TO`. `RECON_SMTP_PORT` defaults to 587

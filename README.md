@@ -310,7 +310,10 @@ See [`deploy/`](deploy/):
   to SYSTEM and Administrators; ACL failures stop installation. Pass the
   installed agent `.exe` shim as `-PythonExe`. The daily trigger adds up to
   30 minutes of random delay, and the UTF-8 wrapper quotes paths and passes
-  the agent exit code to Task Scheduler.
+  the agent exit code to Task Scheduler. The task starts PowerShell with a
+  process-scope `RemoteSigned` execution policy so the local wrapper runs under
+  the Windows client default (`Restricted`); a Group Policy execution policy
+  still applies.
 
 Put the server behind a TLS-terminating reverse proxy in production.
 
