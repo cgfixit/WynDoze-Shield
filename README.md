@@ -373,3 +373,5 @@ MITRE ATT&CK® and ATT&CK® are registered trademarks of The MITRE Corporation.
 This independently maintained project is not affiliated with or endorsed by
 MITRE or any security/backup vendor. Its heuristic findings are leads for human
 review, not MITRE-certified detections or proof of compromise.
+Personal project, built on my own time and equipment. Not affiliated with,
+endorsed by, or derived from work for Veeam Software, Microsoft, or MITRE.

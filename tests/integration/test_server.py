@@ -134,7 +134,7 @@ def test_endpoints_open_count_links_active(
     result = _ingest(client, backup_server_report)
     page = client.get("/endpoints", auth=DASH_AUTH).text
     match = re.search(
-        r'<tr><td><a href="(?P<href>[^"]+)">VBRSRV01</a></td>'
+        r'<tr><td><a href="(?P<href>[^"]+)">BACKUPSRV01</a></td>'
         r"<td>[^<]*</td><td><code>backup_server</code></td>"
         r"<td>[^<]*</td><td>[^<]*</td><td>[^<]*</td>"
         r"<td>[^<]*</td><td>Unknown \(older agent\)</td><td>(?P<open>\d+)</td></tr>",
@@ -144,7 +144,7 @@ def test_endpoints_open_count_links_active(
     href = match.group("href").replace("&amp;", "&")
     query = parse_qs(urlsplit(href).query)
     assert query["status"] == ["active"]
-    assert query["host"] == ["VBRSRV01"]
+    assert query["host"] == ["BACKUPSRV01"]
     assert int(match.group("open")) == result["findings"]
     assert "<table>" in page
 
@@ -179,12 +179,12 @@ def test_endpoint_control_host_has_no_href(
 def test_ingest_and_findings(client: TestClient, backup_server_report: ScanReport) -> None:
     result = _ingest(client, backup_server_report)
     assert result["findings"] >= 3
-    assert result["hostname"] == "VBRSRV01"
+    assert result["hostname"] == "BACKUPSRV01"
 
     for path in ("/", "/triage", "/timeline", "/endpoints", "/reports/summary"):
         assert client.get(path, auth=DASH_AUTH).status_code == 200
 
-    assert "VBRSRV01" in client.get("/endpoints", auth=DASH_AUTH).text
+    assert "BACKUPSRV01" in client.get("/endpoints", auth=DASH_AUTH).text
 
 
 def test_hostile_title_is_escaped(client: TestClient, backup_server_report: ScanReport) -> None:
@@ -306,7 +306,7 @@ def test_next_allowlist(
 def test_triage_card_actions(client: TestClient, backup_server_report: ScanReport) -> None:
     _ingest(client, backup_server_report)
     page = client.get("/triage", auth=DASH_AUTH).text
-    assert "VBRSRV01" in page
+    assert "BACKUPSRV01" in page
     assert 'class="finding"' in page
     assert 'class="actions-main"' in page
     assert 'class="actions-sticky"' in page
@@ -488,7 +488,7 @@ def test_timeline_lists_scans_not_raw_json(
     assert "raw_json" not in page
     assert "ip_addresses_json" not in page
     assert "listening_connections" not in page
-    assert "VBRSRV01" in page
+    assert "BACKUPSRV01" in page
 
 
 def _article(page: str, title: str) -> str:
@@ -697,7 +697,7 @@ def test_lifecycle_rejects_foreign_origin(
         )
         assert response.status_code == 403
     page = client.get("/triage", auth=DASH_AUTH)
-    assert "VBRSRV01" in page.text
+    assert "BACKUPSRV01" in page.text
 
 
 def test_csv_prefixes_formula(client: TestClient, backup_server_report: ScanReport) -> None:

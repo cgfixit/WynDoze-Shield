@@ -15,8 +15,8 @@ _TOKEN = "gAAAAA" + ("Z" * 30)
 def test_public_facts_drop_the_command_line_and_unknown_flags() -> None:
     report = ScanReport(
         scan_time_utc=utc_now_iso(),
-        hostname="VBRSRV01",
-        ip_addresses=["10.0.0.10"],
+        hostname="BACKUPSRV01",
+        ip_addresses=["192.0.2.10"],
         processes=[
             ProcessInfo(
                 pid=10,
@@ -35,7 +35,7 @@ def test_public_facts_drop_the_command_line_and_unknown_flags() -> None:
     assert facts["sealed_command_line_count"] == 1
     assert facts["patterns"] == ["encoded-powershell", "eventlog-clear"]
     assert facts["process_count"] == 1
-    assert facts["ip_addresses"] == ["10.0.0.10"]
+    assert facts["ip_addresses"] == ["192.0.2.10"]
     assert _TOKEN not in str(facts)
     assert "not-in-the-pack-zz" not in str(facts)
 
