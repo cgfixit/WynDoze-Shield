@@ -311,9 +311,10 @@ python .agents/skills/invariant-guard/check_invariants.py
 ```
 
 Hosted CI runs Ruff, strict mypy on both platforms, the invariant guard, wheel
-building, Linux coverage, and Windows Server 2022/2025 regressions on Python
-3.12 through 3.15. Hosted runners do not establish Windows 10/11 or Server
-2016/2019 acceptance.
+building, Linux coverage, Windows Server 2022/2025 regressions on Python
+3.12 through 3.15, and the synthetic task-installer fixture
+(`tests/windows/Test-TaskInstaller.ps1`) on both Windows images. Hosted
+runners do not establish Windows 10/11 or Server 2016/2019 acceptance.
 
 Project layout:
 
