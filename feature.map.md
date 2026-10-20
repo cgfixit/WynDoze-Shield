@@ -12,11 +12,18 @@ Reference for the working tree at version 1.0.0. Behavior below matches the code
 
 Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and `version`.
 
-The source and installed Windows pack are identical v1.3.
+The source and installed Windows pack are identical v1.4.
 Windows admin display names retain a bounded `local_admin_sids` mapping;
 the admin policy recognizes account-domain RIDs 500/512, rather than trusting
 an arbitrary qualified account's basename. Windows service posture rules are
 platform-scoped and empty service inventories do not prove a missing service.
+
+Command-line `all_flags`/`any_flags` conditions run within one process row; legacy
+`names` rules retain host-union behavior. Five contextual rules cover sensitive-target
+dumping, PowerShell download/execution, recovery deletion, event-log clearing and
+autorun writes. Matching covers direct supported syntax, not arbitrary shell/script
+semantics. Command text stays opt-in and sealed; labels are bounded to 32 per row
+alongside PID/create_time. Six benign Windows profiles test command calibration.
 
 ## Server routes
 
@@ -46,6 +53,8 @@ dashboard authentication and shows complete escaped evidence and matching-scan
 times. Invalid filter/page values return 422; absent findings return 404.
 Repeated evidence preserves operator status; changed evidence creates a new row. Authenticated CSV, Markdown, JSON, and
 Sentinel exports include all stored findings and are rendered in memory.
+Markdown cells encode markup and flatten line breaks. Its evidence preview is
+limited to 160 characters; JSON and Sentinel preserve complete evidence.
 
 ## Agent environment
 
@@ -81,7 +90,9 @@ selectable read-only field. Its current-user `WynDoze-InfoScanOverload-scan` tas
 collects locally without upload. The separate SYSTEM installer is
 `deploy/windows/Install-ScanneragentTask.ps1`, default task `ScanzAgentDailyScan`.
 It accepts Scanz credential aliases (preferred) or RECON inputs and writes
-canonical `RECON_AGENT_*` keys. Systemd uses those same canonical keys.
+canonical `RECON_AGENT_*` keys. Its task action runs `powershell.exe` with
+`-ExecutionPolicy RemoteSigned` (process scope; Group Policy still applies).
+Systemd uses those same canonical keys.
 
 `RECON_ALERTS=1` enables SMTP only with `RECON_SMTP_HOST`, `RECON_SMTP_USER`,
 `RECON_SMTP_PASSWORD`, and `RECON_ALERT_TO`. `RECON_SMTP_PORT` defaults to 587

@@ -1,6 +1,0 @@
-interface:
-  display_name: "WynDoze scanner optimizer"
-  short_description: "Inspect scanner fixes and prepare focused draft PRs"
-  default_prompt: "Use $wyndozescan-optimizer to inspect this scanner and deliver the authorized fixes."
-policy:
-  allow_implicit_invocation: false

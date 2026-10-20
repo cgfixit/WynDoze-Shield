@@ -107,7 +107,7 @@ those files and backups, decide how long to keep them, and do not post real
 inventory or credentials in public issues. Use [private security reporting](SECURITY.md)
 for suspected vulnerabilities.
 
-`--cmdline` also needs `RECON_AGENT_ENCRYPTION_KEY`. The agent checks the line in memory, keeps a short pattern name such as `encoded-powershell`, and replaces the line with a Fernet token before the report is written or uploaded. The dashboard does not need the key to score that pattern name. Anyone who has the key can decrypt the token. Keep the key off the server if you do not want the server to be able to read those lines.
+`--cmdline` also needs `RECON_AGENT_ENCRYPTION_KEY`. The agent checks the line in memory, keeps bounded pattern names on the process row alongside PID and creation time, and replaces the line with a Fernet token before the report is written or uploaded. The dashboard does not need the key to score those names. The host-level union is retained for older consumers; combined rules require labels on the same process row. Anyone who has the key can decrypt the token. Keep the key off the server if you do not want the server to be able to read those lines.
 
 Command lines may include passwords or tokens supplied to other programs.
 Sealing encrypts the retained text; it does not redact embedded secrets. Leave
@@ -137,7 +137,17 @@ ASGI chunk, concurrent requests, and valid JSON parsing also consume memory.
 
 ## Work the inbox
 
-The installed v1.3 rule pack matches the source copy.
+ProcDump/ntdsutil presence and PowerShell bypass/encoding are advisory. Five contextual
+rules cover sensitive-target dumping, PowerShell download/execution, recovery deletion,
+event-log clearing and autorun writes. Combined rules require one process row; old
+host unions cannot establish attribution. Direct syntax is bounded: no shell wrappers,
+script-file reads, decoded payloads, PID-only dumps or implicit PowerShell commands.
+Identical evidence preserves analyst decisions; new rule/evidence identities create
+fresh triage records. Review legitimate diagnostics and maintenance before acting.
+Synthetic Windows command fixtures do not establish production precision; compare
+alerts per endpoint-day and analyst-confirmed precision before production promotion.
+
+The installed v1.4 rule pack matches the source copy.
 Both files must be updated together; a regression check rejects policy drift.
 Treat tool and service presence as context for review, not a malware verdict.
 Windows-only missing-service hints require a nonempty service inventory.
@@ -156,6 +166,9 @@ same-origin` so its own browser forms retain the origin needed by this check,
 while links to other sites receive no referrer. A request with no `Origin` header still works, which is how the local page posts.
 
 Exports are CSV, Markdown, JSON, and Sentinel NDJSON. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with a single quote.
+Markdown table cells encode markup characters and replace line breaks with spaces,
+so inventory stays in its own cell. Markdown evidence is a 160-character preview;
+use JSON or Sentinel NDJSON for complete evidence and original line breaks.
 
 Finding lists show 50 rows per page. Filter by exact hostname/rule ID, severity,
 or status; Next and Previous retain the selected filters. Page numbers start at 1;
@@ -215,10 +228,13 @@ Run `deploy\windows\Install-ScanneragentTask.ps1` only when you want a SYSTEM ta
 Pass the installed `WynDoze-InfoScanOverload-agent.exe` shim to `-PythonExe`,
 rather than `python.exe`. The daily trigger adds up to 30 minutes of random
 delay. Native `-File` arguments use double quotes, while values inside the
-UTF-8 wrapper use PowerShell quoting. The wrapper returns the agent exit code,
-and installation stops if a task-state ACL cannot be applied. The task is
-allowed to start on battery.
+UTF-8 wrapper use PowerShell quoting. The task action passes
+`-ExecutionPolicy RemoteSigned` so the wrapper runs on Windows 10 and 11, whose
+default policy (`Restricted`) would otherwise refuse the script for the SYSTEM
+account. A Group Policy execution policy still wins over this process-scope
+setting. The wrapper returns the agent exit code, and installation stops if a
+task-state ACL cannot be applied. The task is allowed to start on battery.
 
 The synthetic installer check resets its exit status only after all assertions
 pass, including the expected child exit and ACL failure probes. A failed assertion
-still fails the PowerShell workflow. It does not register a real task or change ACLs.
+still fails the CI Windows job that runs it. It does not register a real task or change ACLs.

@@ -103,6 +103,17 @@ LIMIT ?
 """
 
 _IS_WINDOWS = os.name == "nt"
+# Only the latest scan's collection_health is read for an endpoint row. SQLite's
+# JSON functions pull that object out without decoding the whole report in
+# Python; a build without them falls back to the full raw_json column.
+_ENDPOINT_SQL = """
+SELECT e.*, s.scan_time_utc, {health} AS health_json
+FROM endpoints e
+LEFT JOIN scans s ON s.id = e.last_scan_id
+ORDER BY e.last_seen_utc DESC
+"""
+_HEALTH_EXTRACT = "json_extract(s.raw_json, '$.collection_health')"
+_HEALTH_FULL_REPORT = "s.raw_json"
 
 
 def _prepare_db_parent(path: Path) -> None:
@@ -139,6 +150,7 @@ class Storage:
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
+        self._json_functions: bool | None = None
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -278,19 +290,43 @@ class Storage:
             row = conn.execute("SELECT * FROM scans WHERE id = ?", (scan_id,)).fetchone()
         return _row_to_scan(dict(row)) if row else None
 
-    def list_endpoints(self, stale_after_hours: int = 36) -> list[dict[str, Any]]:
-        """Show collection age separately from upload receipt, including replayed reports."""
-        endpoints = []
+    def list_endpoint_names(self) -> list[str]:
+        """Return hostnames, most recently seen first, without reading any scan."""
         with self._connect() as conn:
             rows = conn.execute(
-                """SELECT e.*, s.scan_time_utc, s.raw_json FROM endpoints e
-                   LEFT JOIN scans s ON s.id=e.last_scan_id
-                   ORDER BY e.last_seen_utc DESC"""
+                "SELECT hostname FROM endpoints ORDER BY last_seen_utc DESC, hostname"
             )
-            for row in rows:
+            return [str(row["hostname"]) for row in rows]
+
+    def _supports_json_functions(self, conn: sqlite3.Connection) -> bool:
+        """Probe once for SQLite JSON support (built in since 3.38, optional before)."""
+        if self._json_functions is None:
+            try:
+                conn.execute("SELECT json_extract('{}', '$.probe')")
+            except sqlite3.OperationalError:
+                self._json_functions = False
+            else:
+                self._json_functions = True
+        return self._json_functions
+
+    def list_endpoints(self, stale_after_hours: int = 36) -> list[dict[str, Any]]:
+        """Show collection age separately from upload receipt, including replayed reports.
+
+        Each row carries only its latest scan's ``collection_health``; the rest
+        of the stored report is not decoded for this page.
+        """
+        endpoints = []
+        with self._connect() as conn:
+            extracted = self._supports_json_functions(conn)
+            query = _ENDPOINT_SQL.format(
+                health=_HEALTH_EXTRACT if extracted else _HEALTH_FULL_REPORT
+            )
+            for row in conn.execute(query):
                 endpoint = dict(row)
-                report = json.loads(endpoint.pop("raw_json") or "{}")
-                endpoint["collection_health"] = report.get("collection_health", {})
+                stored = json.loads(endpoint.pop("health_json") or "{}")
+                if not extracted and isinstance(stored, dict):
+                    stored = stored.get("collection_health", {})
+                endpoint["collection_health"] = stored if isinstance(stored, dict) else {}
                 endpoint["freshness"] = "unknown"
                 try:
                     collected = datetime.fromisoformat(endpoint["scan_time_utc"])

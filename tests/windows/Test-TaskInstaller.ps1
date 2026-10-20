@@ -60,8 +60,9 @@ try {
     Assert-True ($global:WynDozeTaskFixture.Trigger.RandomDelay.TotalMinutes -eq 30) "Jitter must be on trigger"
     Assert-True ($global:WynDozeTaskFixture.Principal.UserId -eq "SYSTEM") "SYSTEM principal preserved"
     $wrapper = Join-Path $state "Invoke-ScanzAgentScan.ps1"
-    $expected = '-NoProfile -NonInteractive -File "' + $wrapper + '"'
-    Assert-True ($global:WynDozeTaskFixture.Action.Argument -eq $expected) "Native -File path needs double quotes"
+    $expected = '-NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "' + $wrapper + '"'
+    Assert-True ($global:WynDozeTaskFixture.Action.Argument -eq $expected) "Native -File path needs double quotes and a process-scope execution policy"
+    Assert-True ($global:WynDozeTaskFixture.Action.Argument -notmatch '(?i)bypass') "Task action must not use Bypass"
     $engine = (Get-Process -Id $PID).Path
     & $engine -NoProfile -NonInteractive -File $wrapper
     Assert-True ($LASTEXITCODE -eq 3) "Wrapper must propagate the agent exit code"

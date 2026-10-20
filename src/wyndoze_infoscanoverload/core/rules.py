@@ -22,6 +22,9 @@ Supported rule kinds
 ``missing_expected_service``
     Fires when an expected service is absent. Used for posture checks.
 
+``cmdline_flag``
+    Matches legacy host names or all_flags/any_flags on one process row.
+
 Every rule may declare a ``roles`` list to scope it to specific endpoint
 roles, and a ``technique`` (MITRE ATT&CK id) for classification.
 """
@@ -83,6 +86,8 @@ class Rule:
     platforms: frozenset[str] = field(default_factory=frozenset)
     loopback_severity: Severity | None = None
     role_severities: tuple[tuple[EndpointRole, Severity], ...] = ()
+    all_flags: tuple[str, ...] = ()
+    any_flags: tuple[str, ...] = ()
 
     def applies_to_role(self, role: EndpointRole) -> bool:
         """Return True if this rule should run for ``role``."""
@@ -178,6 +183,15 @@ def _parse_rule(raw: dict[str, Any]) -> Rule:
         (next(iter(_as_roles([role]))), _as_severity(severity))
         for role, severity in role_severities.items()
     )
+    all_flags = _str_tuple(raw.get("all_flags"), lower=True)
+    any_flags = _str_tuple(raw.get("any_flags"), lower=True)
+    if (
+        kind == "cmdline_flag"
+        and ("all_flags" in raw or "any_flags" in raw)
+        and (raw.get("names") or not (all_flags or any_flags))
+    ):
+        msg = "cmdline_flag requires non-empty all_flags/any_flags without legacy names"
+        raise RuleError(msg)
 
     return Rule(
         rule_id=rule_id,
@@ -199,6 +213,8 @@ def _parse_rule(raw: dict[str, Any]) -> Rule:
             _as_severity(raw["loopback_severity"]) if "loopback_severity" in raw else None
         ),
         role_severities=overrides,
+        all_flags=all_flags,
+        any_flags=any_flags,
     )
 
 
@@ -334,6 +350,17 @@ def _eval_local_admin_unexpected(rule: Rule, report: ScanReport) -> list[str]:
 
 
 def _eval_cmdline_flag(rule: Rule, report: ScanReport) -> list[str]:
+    if rule.all_flags or rule.any_flags:
+        hits: set[str] = set()
+        wanted = set(rule.all_flags) | set(rule.any_flags)
+        for process in report.processes:
+            flags = {flag.lower() for flag in process.cmdline_flags}
+            if not set(rule.all_flags) <= flags:
+                continue
+            if rule.any_flags and not flags.intersection(rule.any_flags):
+                continue
+            hits.add(f"{(process.name or 'unknown')[:128]}: {', '.join(sorted(flags & wanted))}")
+        return sorted(hits)
     have = {flag.lower() for flag in report.cmdline_flags}
     return sorted(have & set(rule.names))
 
