@@ -101,6 +101,7 @@ credentials to public issues. See [SECURITY.md](SECURITY.md) for private reporti
 `pyproject.toml` is the source of truth; `requirements.txt` and
 `constraints.txt` repeat its floors and are not a lock. Server installs
 require FastAPI 0.143.0 or newer.
+The dashboard renders HTML directly; server installs do not require Jinja2.
 
 ```bash
 # From the project root, using uv (recommended):
