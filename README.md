@@ -7,6 +7,15 @@ inbox. Designed for **Windows 10, Windows 11, and Windows Server 2016, 2019,
 2022, and 2025**, with **Python 3.12+**. These are compatibility targets, not a
 claim of native acceptance on each OS.
 
+### Naming
+
+The repository and project are **WynDoze-Shield**. The installed Python
+package, its three console scripts, and the import path keep the earlier
+**WynDoze-InfoScanOverload** / `wyndoze_infoscanoverload` name, environment
+variables use the `RECON_*` prefix, the Linux unit runs as the `recon` user,
+and the Windows SYSTEM task is `ScanzAgentDailyScan`. Those identifiers are
+operator contracts and do not change when the project name does.
+
 ---
 
 ## Video demos
@@ -98,10 +107,12 @@ credentials to public issues. See [SECURITY.md](SECURITY.md) for private reporti
 
 ## Install
 
-`pyproject.toml` is the source of truth; `requirements.txt` and
-`constraints.txt` repeat its floors and are not a lock. Server installs
-require FastAPI 0.143.0 or newer.
-The dashboard renders HTML directly; server installs do not require Jinja2.
+`pyproject.toml` is the source of truth; `requirements.txt` repeats the base
+floors and `constraints.txt` repeats base, server, and dev floors. Neither is
+a lock. Server installs require FastAPI 0.143.0 or newer. The dashboard
+renders HTML directly; server installs do not require Jinja2. The `dev` extra
+carries only tools the suite uses (pytest, pytest-asyncio, pytest-cov, mypy,
+Ruff, and PyYAML stubs).
 
 ```bash
 # From the project root, using uv (recommended):
@@ -118,6 +129,11 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[server,dev]"
 ```
+
+On a Windows desktop, `deploy\windows\Start-WynDoze.ps1` does the same in
+one step: it creates `.venv` with `py -3.12` when missing, installs the
+`server` extra, and opens the desktop launcher. It writes no Machine
+environment variables and registers no task.
 
 Three console scripts are installed:
 
@@ -149,6 +165,11 @@ export RECON_AGENT_TOKEN=devtoken           # must match RECON_INGEST_TOKEN
 export RECON_AGENT_ENCRYPTION_KEY=$(WynDoze-InfoScanOverload-agent gen-key)
 WynDoze-InfoScanOverload-agent scan --server-url http://127.0.0.1:8000/api/scans --role backup_server
 ```
+
+`scan` exits 0 after `Upload OK`, 3 when the upload failed and the report was
+deferred to an encrypted bundle, 1 when it failed with `--no-defer`, and 2 for
+a missing URL, token, or key. `replay` exits 1 when any bundle fails to upload
+or an acknowledged bundle cannot be deleted.
 
 **3. Work findings** in the Triage Inbox at `/triage`.
 
@@ -207,6 +228,7 @@ list, defaults, and limits are in [feature.map.md](feature.map.md#agent-environm
 | `RECON_AGENT_TOKEN` | Bearer token presented to the server |
 | `RECON_AGENT_ENCRYPTION_KEY` | Fernet key for deferred/isolated bundles and opt-in command lines |
 | `RECON_AGENT_DISABLE` | Set to `1` to exit before collection or upload |
+| `RECON_AGENT_CMDLINE` | Set to `1` to collect command lines without passing `--cmdline`; still requires the key |
 
 ### Server (`RECON_*`)
 
@@ -219,6 +241,7 @@ list, defaults, and limits are in [feature.map.md](feature.map.md#agent-environm
 | `RECON_RULES_PATH` | *(bundled)* | Override rule pack YAML |
 | `RECON_HOST` / `RECON_PORT` | `127.0.0.1` / `8000` | Bind address. Only `127.0.0.1` and `::1` are accepted. |
 | `RECON_STALE_AFTER_HOURS` | `36` (1–8760) | Age after which an endpoint's last collection is overdue. Future or timezone-less timestamps show unknown freshness. |
+| `RECON_LOG_LEVEL` | `info` | Uvicorn log level for the server wrapper |
 
 ---
 
@@ -276,7 +299,7 @@ Example:
 
 ```yaml
 name: windows-default
-version: "1.3"
+version: "1.5"
 rules:
   - id: cmd-credential-dump
     kind: cmdline_flag
@@ -325,6 +348,11 @@ See [`deploy/`](deploy/):
   the Windows client default (`Restricted`); a Group Policy execution policy
   still applies.
 
+- **Windows desktop:** `deploy/windows/Start-WynDoze.ps1` installs the venv
+  and opens the Tk launcher. The launcher's optional schedule is a
+  current-user task (`WynDoze-InfoScanOverload-scan`) that collects locally
+  without uploading; it is not the SYSTEM task above.
+
 Put the server behind a TLS-terminating reverse proxy in production.
 
 Operator guides: [user-guide.md](user-guide.md) and [feature.map.md](feature.map.md).
@@ -334,7 +362,7 @@ Operator guides: [user-guide.md](user-guide.md) and [feature.map.md](feature.map
 ## Development
 
 ```bash
-ruff check src tests        # lint (ruff "ALL" ruleset)
+ruff check src tests        # lint (ruff "ALL" ruleset; CI pins ruff 0.17.1)
 ruff format src tests       # format
 mypy src                    # strict type check
 mypy --platform win32 src   # Windows-only paths
@@ -347,6 +375,13 @@ building, Linux coverage, Windows Server 2022/2025 regressions on Python
 3.12 through 3.15, and the synthetic task-installer fixture
 (`tests/windows/Test-TaskInstaller.ps1`) on both Windows images. Hosted
 runners do not establish Windows 10/11 or Server 2016/2019 acceptance.
+Two further workflows run on every pull request: Gitleaks scans commit
+history for secrets without posting comments or uploading reports, and the
+PR template check (`.github/scripts/check_pr_template.py`) enforces the title
+prefix and required headings from `.github/PULL_REQUEST_TEMPLATE.md`.
+Dependabot refreshes the SHA-pinned actions monthly; Python floors are
+reviewed by hand. The desktop launcher's **Open documentation** button opens
+`documentation.pdf`, a one-page operator summary kept in step with this file.
 
 Project layout:
 
@@ -370,6 +405,8 @@ warranty. The static ATT&CK catalog includes third-party material covered by
 Dependencies retain their own licenses.
 
 MITRE ATT&CK® and ATT&CK® are registered trademarks of The MITRE Corporation.
+This independently maintained project is not affiliated with or endorsed by
+MITRE or any security/backup vendor.
 Personal project, built on my own time and equipment. Not affiliated with,
 endorsed by, or derived from work for Veeam Software, Microsoft, or MITRE.
 Its heuristic findings are leads for human review, not MITRE-certified

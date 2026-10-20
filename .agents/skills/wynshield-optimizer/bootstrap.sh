@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# bootstrap.sh: WynDoze-Optimize harness.
+# bootstrap.sh: WynShield optimizer harness.
 #
-# The scriptable half of the WynDoze-Optimize workflow, so the agent spends its
+# The scriptable half of the WynShield optimizer workflow, so the agent spends its
 # budget reading code and writing PRs.
 #
 #   1. Reports the git identity commits will carry.
