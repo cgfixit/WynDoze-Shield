@@ -1,4 +1,7 @@
-# Use WynDoze-InfoScanOverload on Windows
+# Use WynDoze-Shield on Windows
+
+WynDoze-Shield installs as the `WynDoze-InfoScanOverload` package; its console
+scripts, `RECON_*` environment variables, and task names keep that name.
 
 This guide targets Windows 10, Windows 11, and Windows Server 2016, 2019, 2022,
 and 2025 with Python 3.12 or newer. Examples use the minimum version, 3.12.
@@ -20,6 +23,10 @@ python -m pip install -e ".[server,dev]"
 
 `pyproject.toml` is the source of truth. `requirements.txt` and `constraints.txt` repeat the same floors. They are not a lock.
 
+`deploy\windows\Start-WynDoze.ps1` performs the same install with only the
+`server` extra and then opens the desktop launcher. It writes no Machine
+environment variables and registers no task.
+
 You should see `WynDoze-InfoScanOverload-agent.exe`, `WynDoze-InfoScanOverload-server.exe`, and `WynDoze-InfoScanOverload-desktop.exe` under `.venv\Scripts`.
 
 ## Desktop launcher
@@ -40,8 +47,9 @@ The launcher sets its child dashboard username to `admin`, matching the window,
 even when the shell has `RECON_DASHBOARD_USER` set to another name. A server
 started directly from the CLI still honors that environment setting.
 
-**Create scheduled task** registers `WynDoze-InfoScanOverload-scan` for the current
-user at 02:30 with the selected cadence. It collects to
+**Open documentation** opens `documentation.pdf` from the project folder when
+it exists. **Create scheduled task** registers `WynDoze-InfoScanOverload-scan` for the current
+user at 02:30 with the selected cadence (daily, weekly, or monthly). It collects to
 `%LOCALAPPDATA%\WynDoze-InfoScanOverload\scheduled-scan.json` without uploading or
 sending mail. That file contains unencrypted inventory. Restrict and remove it
 according to your retention policy. The SYSTEM task described below is separate.
@@ -91,7 +99,10 @@ $env:RECON_AGENT_ENCRYPTION_KEY = .\.venv\Scripts\WynDoze-InfoScanOverload-agent
 
 HTTP is allowed only for `127.0.0.1` and `::1`. Every other host needs `https`. The agent ignores proxy environment variables.
 
-A successful upload prints `Upload OK`. The Triage Inbox at `/triage` lists the findings.
+A successful upload prints `Upload OK` and exits 0. A failed upload with the
+default `--defer` writes an encrypted bundle and exits 3; `--no-defer` exits 1.
+A missing URL, token, or key exits 2 before any collection is uploaded. The
+Triage Inbox at `/triage` lists the findings.
 
 To collect without uploading:
 
@@ -107,7 +118,7 @@ those files and backups, decide how long to keep them, and do not post real
 inventory or credentials in public issues. Use [private security reporting](SECURITY.md)
 for suspected vulnerabilities.
 
-`--cmdline` also needs `RECON_AGENT_ENCRYPTION_KEY`. The agent checks the line in memory, keeps bounded pattern names on the process row alongside PID and creation time, and replaces the line with a Fernet token before the report is written or uploaded. The dashboard does not need the key to score those names. The host-level union is retained for older consumers; combined rules require labels on the same process row. Anyone who has the key can decrypt the token. Keep the key off the server if you do not want the server to be able to read those lines.
+`--cmdline` also needs `RECON_AGENT_ENCRYPTION_KEY`. Setting `RECON_AGENT_CMDLINE=1` in the environment has the same effect as the flag. The agent checks the line in memory, keeps bounded pattern names on the process row alongside PID and creation time, and replaces the line with a Fernet token before the report is written or uploaded. The dashboard does not need the key to score those names. The host-level union is retained for older consumers; combined rules require labels on the same process row. Anyone who has the key can decrypt the token. Keep the key off the server if you do not want the server to be able to read those lines.
 
 Command lines may include passwords or tokens supplied to other programs.
 Sealing encrypts the retained text; it does not redact embedded secrets. Leave

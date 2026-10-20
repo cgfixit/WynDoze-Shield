@@ -5,8 +5,9 @@ Commands
 ``scan``      Collect telemetry and upload (or defer to the encrypted cache).
 ``replay``    Re-send any cached bundles (used on the jumpbox / after outage).
 ``bundle``    Collect telemetry to an encrypted bundle only (isolated machine).
-``evaluate``  Run the local rules engine against a bundle/JSON and print findings.
+``evaluate-local``  Run the local rules engine against a bundle/JSON and print findings.
 ``gen-key``   Print a fresh Fernet key for the deferred-upload cache.
+``version``   Print the package version.
 """
 
 from __future__ import annotations

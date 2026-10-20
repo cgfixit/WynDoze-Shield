@@ -1,6 +1,8 @@
-# WynDoze-InfoScanOverload feature map
+# WynDoze-Shield feature map
 
 Reference for the working tree at version 1.0.0. Behavior below matches the code in this folder.
+The installed package, console scripts, and import path are named
+`WynDoze-InfoScanOverload` / `wyndoze_infoscanoverload`; environment variables use `RECON_*`.
 
 ## Programs
 
@@ -11,6 +13,14 @@ Reference for the working tree at version 1.0.0. Behavior below matches the code
 | `WynDoze-InfoScanOverload-desktop` | `wyndoze_infoscanoverload.desktop:main` | Windows window for scan, dashboard, schedule, and opt-in SMTP alerts |
 
 Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and `version`.
+`scan` and `replay` accept `--insecure` to skip TLS verification for testing only.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Success, or `RECON_AGENT_DISABLE` set |
+| 1 | `scan` upload failed with `--no-defer`; `replay` had a failed upload or an acknowledged bundle it could not delete |
+| 2 | Missing or non-loopback HTTP `--server-url`, missing token, missing key, or unreadable report |
+| 3 | `scan` upload failed and the report was deferred to an encrypted bundle |
 
 The source and installed Windows pack are identical v1.5.
 Windows admin display names retain a bounded `local_admin_sids` mapping;
@@ -66,6 +76,7 @@ limited to 160 characters; JSON and Sentinel preserve complete evidence.
 | `RECON_AGENT_TOKEN` | Bearer token for upload and replay |
 | `RECON_AGENT_ENCRYPTION_KEY` | Fernet key. Required before upload when `--defer` is on, and required by `bundle` and `replay` |
 | `RECON_AGENT_DISABLE` | `1`, `true`, `yes`, or `on` exits 0 before collection |
+| `RECON_AGENT_CMDLINE` | `1`, `true`, `yes`, or `on` collects command lines like `--cmdline`; requires the key |
 
 `scan --server-url` is required unless `--no-upload` is set. The default cache directory on Windows is `%ProgramData%\WynDoze-InfoScanOverload\cache`.
 
@@ -80,6 +91,8 @@ limited to 160 characters; JSON and Sentinel preserve complete evidence.
 | `RECON_RULES_PATH` | bundled pack | YAML rule pack |
 | `RECON_HOST` | `127.0.0.1` | Only `127.0.0.1` or `::1` |
 | `RECON_PORT` | `8000` | Listen port |
+| `RECON_STALE_AFTER_HOURS` | `36` | Endpoint collection age (1–8760) after which it is overdue |
+| `RECON_LOG_LEVEL` | `info` | Uvicorn log level |
 
 Startup creates a missing database parent privately and preserves existing directory
 permissions. Server/development FastAPI floors are 0.143.0.
@@ -88,8 +101,9 @@ FastAPI telemetry flags are forced off inside `create_app`. `OTEL_SDK_DISABLED` 
 
 ## Desktop and optional mail
 
-The Tk launcher generates per-window credentials and exposes the password as a
-selectable read-only field. Its current-user `WynDoze-InfoScanOverload-scan` task
+`deploy/windows/Start-WynDoze.ps1` creates `.venv` with `py -3.12`, installs the
+`server` extra, and starts the launcher. The Tk launcher generates per-window credentials and exposes the password as a
+selectable read-only field, and opens `documentation.pdf` from the project root on request. Its current-user `WynDoze-InfoScanOverload-scan` task
 collects locally without upload. The separate SYSTEM installer is
 `deploy/windows/Install-ScanneragentTask.ps1`, default task `ScanzAgentDailyScan`.
 It accepts Scanz credential aliases (preferred) or RECON inputs and writes
