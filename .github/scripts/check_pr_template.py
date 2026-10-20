@@ -35,11 +35,16 @@ STAMP_RE = re.compile(r"^🤖 Last updated: \d{4}-\d{2}-\d{2} \d{2}:\d{2} ET$")
 STAMP_PLACEHOLDER = "🤖 Last updated: YYYY-MM-DD HH:MM ET"
 # Lines an automated PR tool may append after the stamp, whichever tool it is:
 # a rule, an optionally italic or robot-prefixed "Generated/Created/Authored by|with"
-# line, or a bare link. Nothing else may follow the stamp.
+# line, a bare link, or one Cursor badge div of cursor.com image links.
+# Nothing else may follow the stamp.
 FOOTER_RES = (
     re.compile(r"^---$"),
     re.compile(r"^_?(🤖 )?(Generated|Created|Authored) (by|with) .+?_?$"),
     re.compile(r"^https?://\S+$"),
+    re.compile(
+        r'^<div>(?:<a href="https://cursor\.com/[^"]*">'
+        r"<picture>(?:(?!</picture>).)*</picture></a>&nbsp;)+</div>$"
+    ),
 )
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 CHECKED_BOX_RE = re.compile(r"^\s*[-*]\s+\[[xX]\]\s+\S")
@@ -276,7 +281,19 @@ def self_test() -> int:
         GOOD_BODY.split("\n---\n", maxsplit=1)[0]
         + "\n---\n_Created with [Codex](https://chatgpt.com/codex)_\n"
     )
-    for name, body in (("good body", GOOD_BODY), ("other tool footer", other_tool)):
+    cursor_badge = (
+        '<div><a href="https://cursor.com/agents/bc-example?cursor_ref=pr_footer">'
+        '<picture><source media="(prefers-color-scheme: dark)" '
+        'srcset="https://cursor.com/assets/images/open-in-web-dark.png">'
+        '<img alt="Open in Web" width="114" height="28" '
+        'src="https://cursor.com/assets/images/open-in-web-dark.png"></picture></a>&nbsp;</div>'
+    )
+    cursor_tool = GOOD_BODY.rstrip() + "\n\n" + cursor_badge + "\n"
+    for name, body in (
+        ("good body", GOOD_BODY),
+        ("other tool footer", other_tool),
+        ("cursor badge footer", cursor_tool),
+    ):
         problems.extend(f"{name} rejected: {f}" for f in check(GOOD_TITLE, body))
     planted = planted_violations()
     for name, (title, body, expected) in planted.items():
