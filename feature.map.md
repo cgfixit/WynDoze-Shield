@@ -12,7 +12,7 @@ Reference for the working tree at version 1.0.0. Behavior below matches the code
 
 Agent commands are `scan`, `replay`, `bundle`, `evaluate-local`, `gen-key`, and `version`.
 
-The source and installed Windows pack are identical v1.3.
+The source and installed Windows pack are identical v1.4.
 Windows admin display names retain a bounded `local_admin_sids` mapping;
 the admin policy recognizes account-domain RIDs 500/512, rather than trusting
 an arbitrary qualified account's basename. Windows service posture rules are
@@ -126,6 +126,12 @@ Missing-service checks skip explicitly incomplete service inventories.
 ## Collectors
 
 Windows software comes from `reg.exe` with `/reg:64` and `/reg:32`, decoded as OEM text. Local administrators come from `Get-LocalGroupMember -SID S-1-5-32-544`. Service rows use the service name, display name, and status. Process command lines stay empty unless `--cmdline` or `RECON_AGENT_CMDLINE=1` is set. That mode requires `RECON_AGENT_ENCRYPTION_KEY`. The stored value is a Fernet token. Pattern names such as `encoded-powershell` are stored separately so the server can score them without the key.
+
+Listener evidence retains address, scope, PID and observed process name. Loopback-only
+severity is info; mixed bindings keep the higher assessment. RDP has one role-adjusted
+rule. A local listener does not establish external reachability or protocol identity.
+Changed PID/owner evidence can create a fresh triage row; identical evidence retains
+the analyst decision.
 
 ## Not in this tree
 

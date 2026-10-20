@@ -31,6 +31,7 @@ roles, and a ``technique`` (MITRE ATT&CK id) for classification.
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -83,6 +84,8 @@ class Rule:
     allow: frozenset[str] = field(default_factory=frozenset)
     allow_account_rids: frozenset[int] = field(default_factory=frozenset)
     platforms: frozenset[str] = field(default_factory=frozenset)
+    loopback_severity: Severity | None = None
+    role_severities: tuple[tuple[EndpointRole, Severity], ...] = ()
     all_flags: tuple[str, ...] = ()
     any_flags: tuple[str, ...] = ()
 
@@ -172,6 +175,14 @@ def _parse_rule(raw: dict[str, Any]) -> Rule:
         msg = f"rule {rule_id!r}: allow_account_rids must be positive 32-bit integers"
         raise RuleError(msg)
 
+    role_severities = raw.get("role_severities", {})
+    if not isinstance(role_severities, dict):
+        msg = "role_severities must be a mapping"
+        raise RuleError(msg)
+    overrides = tuple(
+        (next(iter(_as_roles([role]))), _as_severity(severity))
+        for role, severity in role_severities.items()
+    )
     all_flags = _str_tuple(raw.get("all_flags"), lower=True)
     any_flags = _str_tuple(raw.get("any_flags"), lower=True)
     if (
@@ -198,6 +209,10 @@ def _parse_rule(raw: dict[str, Any]) -> Rule:
         allow=frozenset(_str_tuple(raw.get("allow"), lower=True)),
         allow_account_rids=frozenset(allowed_rids),
         platforms=frozenset(_str_tuple(raw.get("platforms"), lower=True)),
+        loopback_severity=(
+            _as_severity(raw["loopback_severity"]) if "loopback_severity" in raw else None
+        ),
+        role_severities=overrides,
         all_flags=all_flags,
         any_flags=any_flags,
     )
@@ -246,12 +261,12 @@ def _looks_like_path(source: str | Path) -> bool:
     return "\n" not in stripped and stripped.endswith((".yml", ".yaml"))
 
 
-def _finding_from_rule(rule: Rule, evidence: Sequence[str]) -> Finding:
+def _finding_from_rule(rule: Rule, evidence: Sequence[str], severity: Severity) -> Finding:
     technique = lookup(rule.technique)
     return Finding(
         rule_id=rule.rule_id,
         title=rule.title,
-        severity=rule.severity,
+        severity=severity,
         category=rule.category,
         message=rule.message,
         technique_id=technique.technique_id if technique else rule.technique,
@@ -262,9 +277,29 @@ def _finding_from_rule(rule: Rule, evidence: Sequence[str]) -> Finding:
     )
 
 
+def _bind_scope(address: str | None) -> str:
+    try:
+        ip = ipaddress.ip_address(address or "")
+    except ValueError:
+        return "unknown"
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    if ip.is_loopback:
+        return "loopback"
+    return "wildcard" if ip.is_unspecified else "interface"
+
+
 def _eval_listening_port(rule: Rule, report: ScanReport) -> list[str]:
-    listening = {c.local_port for c in report.listening_connections if c.local_port}
-    return [f"port {p} listening" for p in sorted(rule.ports & listening)]
+    owners = {p.pid: p.name for p in report.processes if p.pid is not None}
+    return sorted(
+        {
+            f"port {c.local_port} listening on {(c.local_ip or 'unknown')[:128]} "
+            f"({_bind_scope(c.local_ip)}); pid={c.pid if c.pid is not None else 'unknown'}; "
+            f"process={(owners.get(c.pid) if c.pid is not None else None) or 'unknown'}"
+            for c in report.listening_connections
+            if c.local_port in rule.ports
+        }
+    )
 
 
 def _eval_process_name(rule: Rule, report: ScanReport) -> list[str]:
@@ -369,7 +404,12 @@ def evaluate(report: ScanReport, pack: RulePack) -> list[Finding]:
         evaluator = _EVALUATORS[rule.kind]
         evidence = evaluator(rule, report)
         if evidence:
-            findings.append(_finding_from_rule(rule, evidence))
+            severity = dict(rule.role_severities).get(report.role, rule.severity)
+            if rule.kind == "listening_port" and rule.loopback_severity is not None:
+                matches = [c for c in report.listening_connections if c.local_port in rule.ports]
+                if all(_bind_scope(c.local_ip) == "loopback" for c in matches):
+                    severity = min(severity, rule.loopback_severity)
+            findings.append(_finding_from_rule(rule, evidence, severity))
 
     findings.sort(key=lambda f: (-f.severity.rank, f.rule_id))
     return findings

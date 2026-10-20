@@ -147,7 +147,7 @@ fresh triage records. Review legitimate diagnostics and maintenance before actin
 Synthetic Windows command fixtures do not establish production precision; compare
 alerts per endpoint-day and analyst-confirmed precision before production promotion.
 
-The installed v1.3 rule pack matches the source copy.
+The installed v1.4 rule pack matches the source copy.
 Both files must be updated together; a regression check rejects policy drift.
 Treat tool and service presence as context for review, not a malware verdict.
 Windows-only missing-service hints require a nonempty service inventory.
@@ -179,6 +179,11 @@ preserves review decisions, including Flagged. Changed evidence gets a separate
 finding. Empty results retain filter controls. All four export
 formats include the complete stored finding set, including archived and suppressed
 rows, regardless of the current filters. Full exports are rendered in memory and can be large on a busy dashboard.
+
+Listener evidence includes bind address/scope, PID and process name when available.
+Loopback-only findings are informational; RDP emits one finding with role priority.
+A socket does not establish internet reachability or a bind shell. Identical evidence
+preserves analyst decisions; changed ownership/PID creates new triage evidence.
 
 ## Check collection health
 

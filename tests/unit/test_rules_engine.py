@@ -185,6 +185,57 @@ def test_malformed_pack_root_fails_load(text: str) -> None:
         load_rule_pack(text)
 
 
+@pytest.mark.parametrize("address", ["127.0.0.1", "::1", "::ffff:127.0.0.1"])
+def test_listener_context_and_role_severity(clean_report: ScanReport, address: str) -> None:
+    clean_report.role = EndpointRole.BACKUP_SERVER
+    clean_report.processes = [ProcessInfo(pid=42, name="remote.exe")]
+    clean_report.listening_connections = [
+        ListeningConnection(local_port=3389, local_ip=address, pid=42)
+    ]
+    findings = [
+        f for f in evaluate(clean_report, default_rule_pack()) if f.rule_id.startswith("net-rdp")
+    ]
+    assert len(findings) == 1
+    assert findings[0].severity.value == "info"
+    assert f"on {address} (loopback); pid=42; process=remote.exe" in findings[0].evidence[0]
+    clean_report.listening_connections.append(
+        ListeningConnection(local_port=3389, local_ip="0.0.0.0")  # noqa: S104 - synthetic inventory
+    )
+    finding = next(
+        f for f in evaluate(clean_report, default_rule_pack()) if f.rule_id == "net-rdp-listener"
+    )
+    assert finding.severity.value == "high"
+    assert any("(wildcard)" in e for e in finding.evidence)
+
+
+def test_listener_evidence_is_bounded(clean_report: ScanReport) -> None:
+    clean_report.processes = [ProcessInfo(pid=42, name="p" * 512)]
+    clean_report.listening_connections = [
+        ListeningConnection(pid=42, local_port=4444, local_ip="x" * 512)
+    ]
+    finding = next(
+        f
+        for f in evaluate(clean_report, default_rule_pack())
+        if f.rule_id == "net-unusual-listener"
+    )
+    assert "(unknown); pid=42; process=" in finding.evidence[0]
+    assert len(finding.evidence[0]) == 512
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("loopback_severity", "bad"),
+        ("role_severities", "[]"),
+        ("role_severities", "{mainframe: high}"),
+        ("role_severities", "{workstation: bad}"),
+    ],
+)
+def test_listener_overrides_validate(field: str, value: str) -> None:
+    with pytest.raises(RuleError):
+        load_rule_pack(_pack(f"- id: x\n  kind: listening_port\n  title: X\n  {field}: {value}"))
+
+
 def test_combined_flags_require_one_process(clean_report: ScanReport) -> None:
     pack = load_rule_pack(
         _pack("""
