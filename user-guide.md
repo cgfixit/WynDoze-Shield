@@ -166,6 +166,9 @@ same-origin` so its own browser forms retain the origin needed by this check,
 while links to other sites receive no referrer. A request with no `Origin` header still works, which is how the local page posts.
 
 Exports are CSV, Markdown, JSON, and Sentinel NDJSON. A CSV cell that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return is prefixed with a single quote.
+Markdown table cells encode markup characters and replace line breaks with spaces,
+so inventory stays in its own cell. Markdown evidence is a 160-character preview;
+use JSON or Sentinel NDJSON for complete evidence and original line breaks.
 
 Finding lists show 50 rows per page. Filter by exact hostname/rule ID, severity,
 or status; Next and Previous retain the selected filters. Page numbers start at 1;
