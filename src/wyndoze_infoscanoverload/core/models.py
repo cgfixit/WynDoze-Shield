@@ -63,6 +63,7 @@ class ProcessInfo(BaseModel):
     # Sealed Fernet token when collection is on. Never the raw command line.
     cmdline: Annotated[str, Field(max_length=4096)] | None = None
     create_time: float | None = None
+    cmdline_flags: list[ShortStr] = Field(default_factory=list, max_length=32)
 
 
 class ListeningConnection(BaseModel):

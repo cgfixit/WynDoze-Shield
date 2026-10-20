@@ -48,7 +48,10 @@ def test_malware_name_and_bypass_flag() -> None:
         scan_time_utc="2026-01-01T00:00:00Z",
         hostname="WS-001",
         processes=[
-            ProcessInfo(name="xmrig.exe", cmdline="powershell -executionpolicy bypass -file a.ps1")
+            ProcessInfo(name="xmrig.exe"),
+            ProcessInfo(
+                name="powershell.exe", cmdline="powershell -executionpolicy bypass -file a.ps1"
+            ),
         ],
         installed_software=[],
     )

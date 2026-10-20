@@ -13,6 +13,7 @@ from wyndoze_infoscanoverload.core.models import (
     ScanReport,
     ServiceInfo,
 )
+from wyndoze_infoscanoverload.core.rulepacks import default_rule_pack
 from wyndoze_infoscanoverload.core.rules import (
     RuleError,
     evaluate,
@@ -182,3 +183,125 @@ def test_malformed_rules_fail_load(body: str, match: str) -> None:
 def test_malformed_pack_root_fails_load(text: str) -> None:
     with pytest.raises(RuleError):
         load_rule_pack(text)
+
+
+@pytest.mark.parametrize("address", ["127.0.0.1", "::1", "::ffff:127.0.0.1"])
+def test_listener_context_and_role_severity(clean_report: ScanReport, address: str) -> None:
+    clean_report.role = EndpointRole.BACKUP_SERVER
+    clean_report.processes = [ProcessInfo(pid=42, name="remote.exe")]
+    clean_report.listening_connections = [
+        ListeningConnection(local_port=3389, local_ip=address, pid=42)
+    ]
+    findings = [
+        f for f in evaluate(clean_report, default_rule_pack()) if f.rule_id.startswith("net-rdp")
+    ]
+    assert len(findings) == 1
+    assert findings[0].severity.value == "info"
+    assert f"on {address} (loopback); pid=42; process=remote.exe" in findings[0].evidence[0]
+    clean_report.listening_connections.append(
+        ListeningConnection(local_port=3389, local_ip="0.0.0.0")  # noqa: S104 - synthetic inventory
+    )
+    finding = next(
+        f for f in evaluate(clean_report, default_rule_pack()) if f.rule_id == "net-rdp-listener"
+    )
+    assert finding.severity.value == "high"
+    assert any("(wildcard)" in e for e in finding.evidence)
+
+
+def test_listener_evidence_is_bounded(clean_report: ScanReport) -> None:
+    clean_report.processes = [ProcessInfo(pid=42, name="p" * 512)]
+    clean_report.listening_connections = [
+        ListeningConnection(pid=42, local_port=4444, local_ip="x" * 512)
+    ]
+    finding = next(
+        f
+        for f in evaluate(clean_report, default_rule_pack())
+        if f.rule_id == "net-unusual-listener"
+    )
+    assert "(unknown); pid=42; process=" in finding.evidence[0]
+    assert len(finding.evidence[0]) == 512
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("loopback_severity", "bad"),
+        ("role_severities", "[]"),
+        ("role_severities", "{mainframe: high}"),
+        ("role_severities", "{workstation: bad}"),
+    ],
+)
+def test_listener_overrides_validate(field: str, value: str) -> None:
+    with pytest.raises(RuleError):
+        load_rule_pack(_pack(f"- id: x\n  kind: listening_port\n  title: X\n  {field}: {value}"))
+
+
+def test_combined_flags_require_one_process(clean_report: ScanReport) -> None:
+    pack = load_rule_pack(
+        _pack("""
+        - id: combination
+          title: Combination
+          kind: cmdline_flag
+          all_flags: [download-cradle, invoke-expression]
+          any_flags: [encoded-powershell, hidden-window]
+    """)
+    )
+    flags = ["download-cradle", "invoke-expression", "hidden-window"]
+    report = clean_report.model_copy(
+        update={
+            "cmdline_flags": flags,
+            "processes": [
+                ProcessInfo(name="powershell.exe", cmdline_flags=[flag]) for flag in flags
+            ],
+        }
+    )
+    assert evaluate(report, pack) == []
+    report.processes = [ProcessInfo(name="powershell.exe", cmdline_flags=flags)]
+    assert evaluate(report, pack)[0].evidence == [
+        "powershell.exe: download-cradle, hidden-window, invoke-expression"
+    ]
+    report.processes[0].cmdline_flags = flags[:2]
+    assert evaluate(report, pack) == []
+
+
+def test_legacy_flag_rule_uses_host_flags(clean_report: ScanReport) -> None:
+    pack = load_rule_pack(
+        _pack("""
+        - id: legacy
+          title: Legacy
+          kind: cmdline_flag
+          names: [encoded-powershell]
+    """)
+    )
+    clean_report.cmdline_flags = ["encoded-powershell"]
+    assert evaluate(clean_report, pack)[0].evidence == ["encoded-powershell"]
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        "all_flags: []",
+        "any_flags: []",
+        "all_flags: [dump-operation]\n  names: [dump-operation]",
+    ],
+)
+def test_ambiguous_or_empty_combination_is_rejected(fields: str) -> None:
+    with pytest.raises(RuleError, match="non-empty all_flags/any_flags without legacy names"):
+        load_rule_pack(_pack(f"- id: x\n  kind: cmdline_flag\n  title: X\n  {fields}"))
+
+
+def test_command_evidence_is_bounded(clean_report: ScanReport) -> None:
+    clean_report.processes = [
+        ProcessInfo(name="p" * 512, cmdline_flags=["dump-operation", "sensitive-target"])
+    ]
+    finding = next(
+        f for f in evaluate(clean_report, default_rule_pack()) if f.rule_id == "cmd-credential-dump"
+    )
+    assert "dump-operation, sensitive-target" in finding.evidence[0]
+    assert len(finding.evidence[0]) <= 512
+
+
+@pytest.mark.parametrize("field", ["all_flags", "any_flags"])
+def test_combination_field_requires_list(field: str) -> None:
+    with pytest.raises(RuleError):
+        load_rule_pack(_pack(f"- id: x\n  kind: cmdline_flag\n  title: X\n  {field}: bad"))

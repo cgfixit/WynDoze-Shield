@@ -7,7 +7,7 @@
 #   1. Reports the git identity commits will carry.
 #   2. Fetches origin and, when given a branch name, positions on it: an existing
 #      branch is checked out without a reset; a new one is cut from BASE
-#      (default origin/main; pass a parent branch to stack).
+#      (default origin/main; use the refreshed default branch).
 #   3. Prints a scan seed: unmerged remote branches, file counts, largest
 #      modules, CI workflows, manifests, the invariant checker summary, and
 #      recent commits on main.
@@ -16,7 +16,7 @@
 # commit.
 #
 # Usage:
-#   bash .agents/skills/wyndozescan-optimizer/bootstrap.sh [work-branch [base-ref]]
+#   bash .agents/skills/wynshield-optimizer/bootstrap.sh [work-branch [base-ref]]
 
 set -euo pipefail
 

@@ -17,16 +17,23 @@ def test_public_facts_drop_the_command_line_and_unknown_flags() -> None:
         scan_time_utc=utc_now_iso(),
         hostname="VBRSRV01",
         ip_addresses=["10.0.0.10"],
-        processes=[ProcessInfo(pid=10, name="mimikatz.exe", cmdline=_TOKEN)],
+        processes=[
+            ProcessInfo(
+                pid=10,
+                name="mimikatz.exe",
+                cmdline=_TOKEN,
+                cmdline_flags=["eventlog-clear", "not-in-the-pack-zz"],
+            )
+        ],
         cmdline_flags=["Encoded-PowerShell", "not-in-the-pack-zz"],
     )
     facts = present.public_scan_facts(
         report.model_dump_json(),
         "2026-01-01T00:00:00+00:00",
-        frozenset({"encoded-powershell"}),
+        frozenset({"encoded-powershell", "eventlog-clear"}),
     )
     assert facts["sealed_command_line_count"] == 1
-    assert facts["patterns"] == ["encoded-powershell"]
+    assert facts["patterns"] == ["encoded-powershell", "eventlog-clear"]
     assert facts["process_count"] == 1
     assert facts["ip_addresses"] == ["10.0.0.10"]
     assert _TOKEN not in str(facts)

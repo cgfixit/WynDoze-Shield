@@ -328,7 +328,7 @@ def test_low_findings_stay_in_details(client: TestClient, backup_server_report: 
     assert "Low and info (" in page
     assert page.index('data-severity="critical"') < page.index("<details>")
     details = page.split("<details>", 1)[1]
-    assert "Potentially suspicious software is installed" in details
+    assert "Administration or dual-use software is installed" in details
     filtered = client.get("/triage?severity=low", auth=DASH_AUTH).text
     assert "<details>" not in filtered
     assert 'data-severity="low"' in filtered
@@ -554,7 +554,7 @@ def test_scan_page_hides_command_lines(
     collision = _article(page.text, "Colliding process name")
     assert "<h4>Evidence</h4>" in collision
     assert "Matched pattern" not in collision
-    matched = _article(page.text, "Suspicious command-line pattern observed")
+    matched = _article(page.text, "Command-line supporting signal observed")
     assert "<h4>Matched pattern</h4>" in matched
     assert 'value="/scans/1"' in page.text
     moved = client.post(

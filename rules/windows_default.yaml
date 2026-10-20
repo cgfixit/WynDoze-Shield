@@ -1,81 +1,80 @@
-# WynDoze-InfoScanOverload default rule pack v1.3.
+# WynDoze-InfoScanOverload default rule pack v1.5.
 name: windows-default
-version: "1.3"
+version: "1.5"
 
 rules:
-  # --- Exposed remote-access / lateral-movement surface ----------------------
+  # --- Listening sockets; reachability is not established ----------------------
   - id: net-rdp-listener
-    title: RDP listener exposed
+    title: RDP port is listening
     kind: listening_port
+    loopback_severity: info
     severity: medium
-    category: exposed_service
+    category: listening_service
     message: Remote Desktop (3389) is listening. Verify it is required and firewalled.
     technique: T1021.001
     ports: [3389]
+    role_severities: {backup_server: high, repository: high}
 
   - id: net-smb-listener
-    title: SMB listener exposed
+    title: SMB port is listening
     kind: listening_port
+    loopback_severity: info
     severity: medium
-    category: exposed_service
+    category: listening_service
     message: SMB (445) is listening. Confirm the host is not internet-reachable; SMB is the primary lateral-movement and ransomware-spread vector.
     technique: T1021.002
     ports: [445]
 
   - id: net-rpc-netbios-listener
-    title: RPC/NetBIOS listener exposed
+    title: RPC/NetBIOS port is listening
     kind: listening_port
+    loopback_severity: info
     severity: low
-    category: exposed_service
+    category: listening_service
     message: RPC endpoint mapper (135) or NetBIOS session service (139) is listening. Restrict to trusted subnets.
     technique: T1021.003
     ports: [135, 139]
 
   - id: net-mssql-listener
-    title: Database listener exposed
+    title: Database port is listening
     kind: listening_port
+    loopback_severity: info
     severity: medium
-    category: exposed_service
-    message: MSSQL (1433) or MySQL (3306) is listening on this host. Database ports should not be exposed on backup/general endpoints.
+    category: listening_service
+    message: MSSQL (1433) or MySQL (3306) is listening on this host. Database ports should not be listening on backup/general endpoints.
     technique: T1021
     ports: [1433, 3306]
 
   - id: net-winrm-listener
-    title: WinRM listener exposed
+    title: WinRM port is listening
     kind: listening_port
+    loopback_severity: info
     severity: medium
-    category: exposed_service
+    category: listening_service
     message: WinRM (5985/5986) is listening. Restrict to management subnets.
     technique: T1021.006
     ports: [5985, 5986]
 
   - id: net-legacy-cleartext
-    title: Legacy cleartext service exposed
+    title: Legacy cleartext port is listening
     kind: listening_port
+    loopback_severity: info
     severity: high
-    category: exposed_service
+    category: listening_service
     message: FTP/Telnet (21/23) listening. Cleartext protocols should not run on backup infra.
     technique: T1071
     ports: [21, 23]
 
-  - id: net-vnc-or-bindshell
-    title: VNC or common bind-shell port exposed
+  - id: net-unusual-listener
+    title: Listener on a port requiring review
     kind: listening_port
+    loopback_severity: info
     severity: high
-    category: exposed_service
-    message: Port 5900 (VNC), 4444 (a common bind shell), or 6667 (unencrypted IRC, a common C2 channel) is listening.
+    category: listening_service
+    message: Port 5900, 4444, or 6667 is listening. Verify the owning process and intended access; a port number does not identify a protocol or malicious behavior.
     technique: T1219
     ports: [5900, 4444, 6667]
 
-  - id: net-rdp-on-backup-server
-    title: RDP exposed on a backup server
-    kind: listening_port
-    severity: high
-    category: exposed_service
-    message: RDP is listening on a backup server. This is a high-value lateral-movement target.
-    technique: T1021.001
-    roles: [backup_server, repository]
-    ports: [3389]
 
   # --- Dual-use / offensive tooling -------------------------------------------
   - id: proc-credential-dumping
@@ -87,8 +86,6 @@ rules:
     technique: T1003
     names:
       - mimikatz.exe
-      - procdump.exe
-      - ntdsutil.exe
       - lazagne.exe
       - rubeus.exe
       - sharphound.exe
@@ -96,6 +93,14 @@ rules:
       - wce.exe
       - gsecdump.exe
       - nanodump.exe
+
+  - id: proc-diagnostic-admin
+    title: Diagnostic or directory administration tool observed
+    kind: process_name
+    severity: low
+    category: administration
+    message: ProcDump or ntdsutil is running. Tool presence alone does not establish credential dumping; review operation and target context.
+    names: [procdump.exe, procdump64.exe, procdump64a.exe, ntdsutil.exe]
 
   - id: proc-malware-adware
     title: Known malware, miner, or adware process observed
@@ -231,10 +236,10 @@ rules:
       - searchprotect
 
   - id: sw-potentially-suspicious
-    title: Potentially suspicious software is installed
+    title: Administration or dual-use software is installed
     kind: software_present
     severity: low
-    category: adware
+    category: administration
     message: This software is common for administration or file transfer and is also commonly used by attackers. It is not malware by itself.
     substrings:
       - utorrent
@@ -316,26 +321,59 @@ rules:
     names:
       - spooler
 
-  # --- Command-line heuristics (opt-in, sealed) ---------------------------------
-  # NOTE: flags referenced here must exist in agent/cmdline.py::_FLAG_PATTERNS.
-  # New command-line heuristics require an agent code change first.
+  # --- Command-line patterns (opt-in, sealed; combinations require one row) -----
   - id: cmd-suspicious-line
-    title: Suspicious command-line pattern observed
+    title: Command-line supporting signal observed
+    kind: cmdline_flag
+    severity: low
+    category: execution
+    message: An opted-in command line matched an administration or execution pattern. This is supporting evidence, not proof of malicious behavior; the line is sealed.
+    names: [encoded-powershell, invoke-expression, credential-hive, download-cradle, execution-policy-bypass, hidden-window, certutil-download, bitsadmin-transfer, startup-run-key]
+
+  - id: cmd-credential-dump
+    title: Potential sensitive-target dumping operation
+    kind: cmdline_flag
+    severity: high
+    category: credential_access
+    message: One invocation matched both a dump operation and a sensitive target. Review authorization and purpose; diagnostic tools can be legitimate.
+    technique: T1003
+    all_flags: [dump-operation, sensitive-target]
+
+  - id: cmd-download-execute
+    title: PowerShell download and execution indicators
     kind: cmdline_flag
     severity: high
     category: execution
-    message: An opted-in command line matched a high-signal pattern. The line itself is not stored in clear text.
+    message: One PowerShell invocation contains download and expression-execution indicators. Verify whether this is an authorized installer or workflow.
     technique: T1059.001
-    names:
-      - encoded-powershell
-      - invoke-expression
-      - credential-hive
-      - download-cradle
-      - execution-policy-bypass
-      - hidden-window
-      - certutil-download
-      - bitsadmin-transfer
-      - startup-run-key
+    all_flags: [download-cradle, invoke-expression]
+
+  - id: cmd-recovery-inhibition
+    title: Destructive recovery administration operation
+    kind: cmdline_flag
+    severity: high
+    category: defense_evasion
+    message: A recognized utility requested a destructive recovery operation. Verify against authorized maintenance before treating it as malicious.
+    technique: T1490
+    any_flags: [recovery-delete]
+
+  - id: cmd-eventlog-clear
+    title: Event-log clear operation
+    kind: cmdline_flag
+    severity: high
+    category: defense_evasion
+    message: A command requested clearing a named event log. Verify maintenance authorization and logging policy.
+    technique: T1070.001
+    any_flags: [eventlog-clear]
+
+  - id: cmd-autorun-modification
+    title: Autorun registry modification
+    kind: cmdline_flag
+    severity: medium
+    category: persistence
+    message: A registry write operation targeted an autorun location. Verify whether an approved installer or administrator made this change.
+    technique: T1547.001
+    any_flags: [autorun-write]
 
   # --- Posture: expected services missing ---------------------------------------
   - id: svc-defender-missing

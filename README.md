@@ -101,6 +101,7 @@ credentials to public issues. See [SECURITY.md](SECURITY.md) for private reporti
 `pyproject.toml` is the source of truth; `requirements.txt` and
 `constraints.txt` repeat its floors and are not a lock. Server installs
 require FastAPI 0.143.0 or newer.
+The dashboard renders HTML directly; server installs do not require Jinja2.
 
 ```bash
 # From the project root, using uv (recommended):
@@ -224,19 +225,19 @@ list, defaults, and limits are in [feature.map.md](feature.map.md#agent-environm
 ## Rules engine
 
 Rules are declarative YAML. The source pack (`rules/windows_default.yaml`) and
-the bundled copy under `core/rulepacks/` are `windows-default` v1.3 and ship
+the bundled copy under `core/rulepacks/` are `windows-default` v1.5 and ship
 the same policy across **7 rule kinds**; CI's invariant guard rejects any
 drift between the two.
 
 | Kind | Fires when |
 |---|---|
-| `listening_port` | A listed port is listening locally |
+| `listening_port` | A listed port is listening locally; evidence retains binding scope and observed owner |
 | `process_name` | A process matching a listed name is running |
 | `service_present` | An exact service `names` entry or explicit `substrings` entry exists (optional state filter) |
 | `software_present` | Installed software matches a substring |
 | `local_admin_unexpected` | A local admin not on the allow-list is present |
 | `missing_expected_service` | An expected service is absent |
-| `cmdline_flag` | An opted-in command line produced a matching pattern label; the server uses the label rather than decrypting text |
+| `cmdline_flag` | Legacy `names` use host-level labels; `all_flags`/`any_flags` require labels on one process row |
 
 Every rule may declare `roles:` (scope to endpoint roles), `platforms:`, and
 `technique:` (a MITRE ATT&CK id). Process and service presence is a review
@@ -250,6 +251,12 @@ matching remains available for product variants and legacy custom rules. Stopped
 missing Defender is an advisory requiring configured protection-policy context;
 service state alone does not establish active/passive protection or tampering.
 
+Listener findings distinguish loopback, wildcard, interface and unknown bindings.
+Loopback-only findings are informational; mixed bindings retain the higher assessment.
+`role_severities` raises RDP priority on backup/repository roles without a duplicate
+RDP finding. Local socket state does not prove reachability or identify a bind shell.
+Owner/PID metadata is a scan-time observation, not a process-creation event.
+
 Windows reports retain administrator display names and add a bounded
 `local_admin_sids` mapping. The bundled admin rule accepts account-domain RIDs
 500 (built-in Administrator, including renamed/localized accounts) and 512
@@ -258,24 +265,42 @@ never stripped to a trusted basename. Older reports without SIDs still use
 explicit name matches; tune qualified allowlist entries for other approved accounts.
 
 Command lines stay empty unless `--cmdline` is set, and then they are stored as
-Fernet tokens.
+Fernet tokens. Bounded labels remain on the process row with PID and creation
+time. The host union remains for legacy consumers. Use `all_flags` for required
+labels and `any_flags` for alternatives; both conditions apply when both are present.
+These fields cannot be mixed with legacy `names`. Severity describes review priority,
+not confidence of malicious intent. Diagnostic tool presence and bypass/encoding
+switches alone are low supporting signals.
 
 Example:
 
 ```yaml
 name: windows-default
-version: "1.2"
+version: "1.3"
 rules:
-  - id: proc-credential-dumping
-    kind: process_name
-    title: Credential-dumping tool detected
-    severity: critical
+  - id: cmd-credential-dump
+    kind: cmdline_flag
+    title: Potential sensitive-target dumping operation
+    severity: high
     technique: T1003
-    names: [mimikatz.exe, procdump.exe, secretsdump.py]
+    all_flags: [dump-operation, sensitive-target]
 ```
 
 Point the server at a custom pack with `RECON_RULES_PATH=/path/to/pack.yaml`,
 or evaluate with `WynDoze-InfoScanOverload-agent evaluate-local report.json --rules pack.yaml`.
+
+Matching covers bounded direct invocations, not arbitrary shell/script semantics.
+It does not read script files, decode encoded payloads, or recover commands that
+finish between scans. The initial behaviors cover named LSASS targets with supported
+ProcDump switches, `ntdsutil` IFM creation, explicit PowerShell `-Command` download
+and expression execution, `vssadmin delete shadows` / `wmic shadowcopy delete`,
+`wevtutil cl` / `clear-log`, and `reg add` to HKLM/HKCU Run/RunOnce keys (including
+Wow6432Node). PID-only dump targets, uncommon ProcDump switches, implicit PowerShell
+commands, and other registry-write tools are outside this parser's coverage.
+Older agents without per-process labels cannot trigger the new combined rules.
+Validate against representative benign Windows reports and
+review alerts per endpoint-day plus analyst-confirmed precision before production
+promotion; synthetic regression cases do not measure an estate's false-positive rate.
 
 ---
 
@@ -295,7 +320,10 @@ See [`deploy/`](deploy/):
   to SYSTEM and Administrators; ACL failures stop installation. Pass the
   installed agent `.exe` shim as `-PythonExe`. The daily trigger adds up to
   30 minutes of random delay, and the UTF-8 wrapper quotes paths and passes
-  the agent exit code to Task Scheduler.
+  the agent exit code to Task Scheduler. The task starts PowerShell with a
+  process-scope `RemoteSigned` execution policy so the local wrapper runs under
+  the Windows client default (`Restricted`); a Group Policy execution policy
+  still applies.
 
 Put the server behind a TLS-terminating reverse proxy in production.
 
@@ -315,9 +343,10 @@ python .agents/skills/invariant-guard/check_invariants.py
 ```
 
 Hosted CI runs Ruff, strict mypy on both platforms, the invariant guard, wheel
-building, Linux coverage, and Windows Server 2022/2025 regressions on Python
-3.12 through 3.15. Hosted runners do not establish Windows 10/11 or Server
-2016/2019 acceptance.
+building, Linux coverage, Windows Server 2022/2025 regressions on Python
+3.12 through 3.15, and the synthetic task-installer fixture
+(`tests/windows/Test-TaskInstaller.ps1`) on both Windows images. Hosted
+runners do not establish Windows 10/11 or Server 2016/2019 acceptance.
 
 Project layout:
 
