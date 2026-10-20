@@ -34,7 +34,7 @@ def test_list_scans_decodes_ip_addresses(
     scan_id = storage.record_scan(backup_server_report, findings)
     (row,) = storage.list_scans()
     assert row["id"] == scan_id
-    assert row["ip_addresses"] == ["10.0.0.10"]
+    assert row["ip_addresses"] == ["192.0.2.10"]
     assert row["finding_count"] == len(findings)
 
 
@@ -78,9 +78,9 @@ def test_endpoint_names_are_newest_first_without_scan_payloads(
     monkeypatch.setattr(storage_module, "utc_now_iso", lambda: next(clock))
     storage.record_scan(backup_server_report, [])
     storage.record_scan(clean_report, [])
-    assert storage.list_endpoint_names() == ["WS-001", "VBRSRV01"]
+    assert storage.list_endpoint_names() == ["WS-001", "BACKUPSRV01"]
     storage.record_scan(backup_server_report, [])
-    assert storage.list_endpoint_names() == ["VBRSRV01", "WS-001"]
+    assert storage.list_endpoint_names() == ["BACKUPSRV01", "WS-001"]
 
 
 def test_endpoint_names_break_timestamp_ties_by_hostname(
@@ -92,7 +92,7 @@ def test_endpoint_names_break_timestamp_ties_by_hostname(
     monkeypatch.setattr(storage_module, "utc_now_iso", lambda: "2026-10-19T10:00:00+00:00")
     storage.record_scan(clean_report, [])
     storage.record_scan(backup_server_report, [])
-    assert storage.list_endpoint_names() == ["VBRSRV01", "WS-001"]
+    assert storage.list_endpoint_names() == ["BACKUPSRV01", "WS-001"]
 
 
 def test_endpoint_health_matches_with_and_without_json_functions(
@@ -114,6 +114,6 @@ def test_endpoint_health_matches_with_and_without_json_functions(
     assert extracted == fallback
     by_host = {row["hostname"]: row["collection_health"] for row in extracted}
     assert by_host["WS-001"] == {}
-    assert by_host["VBRSRV01"]["services"]["status"] == "partial"
-    assert by_host["VBRSRV01"]["services"]["issues"] == ["limit_reached"]
+    assert by_host["BACKUPSRV01"]["services"]["status"] == "partial"
+    assert by_host["BACKUPSRV01"]["services"]["issues"] == ["limit_reached"]
     assert all("raw_json" not in row and "health_json" not in row for row in extracted)

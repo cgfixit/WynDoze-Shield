@@ -55,9 +55,9 @@ def test_bundle_save_and_load(tmp_path: Path, backup_server_report: ScanReport) 
     assert path.suffix == BUNDLE_SUFFIX
     assert path.exists()
     # Raw bytes must not contain the hostname in cleartext.
-    assert b"VBRSRV01" not in path.read_bytes()
+    assert b"BACKUPSRV01" not in path.read_bytes()
     restored = cache.load(path)
-    assert restored.hostname == "VBRSRV01"
+    assert restored.hostname == "BACKUPSRV01"
 
 
 def test_pending_count(tmp_path: Path, backup_server_report: ScanReport) -> None:
