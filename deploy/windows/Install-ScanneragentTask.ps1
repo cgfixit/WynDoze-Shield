@@ -88,7 +88,11 @@ Protect-ScanzPath -Path $envFile
 ) | Set-Content -LiteralPath $wrapper -Encoding UTF8
 Protect-ScanzPath -Path $wrapper
 
-$taskArguments = "-NoProfile -NonInteractive -File `"$wrapper`""
+# Process-scope RemoteSigned lets the locally written wrapper run under the
+# Windows client default (Restricted). It cannot override a Group Policy
+# execution policy, and it is not Bypass, so the agent's own cmdline
+# heuristic does not flag this task.
+$taskArguments = "-NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File `"$wrapper`""
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $taskArguments
 $trigger = New-ScheduledTaskTrigger -Daily -At $At -RandomDelay (New-TimeSpan -Minutes 30)
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" `

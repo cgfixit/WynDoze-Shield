@@ -220,9 +220,12 @@ Run `deploy\windows\Install-ScanneragentTask.ps1` only when you want a SYSTEM ta
 Pass the installed `WynDoze-InfoScanOverload-agent.exe` shim to `-PythonExe`,
 rather than `python.exe`. The daily trigger adds up to 30 minutes of random
 delay. Native `-File` arguments use double quotes, while values inside the
-UTF-8 wrapper use PowerShell quoting. The wrapper returns the agent exit code,
-and installation stops if a task-state ACL cannot be applied. The task is
-allowed to start on battery.
+UTF-8 wrapper use PowerShell quoting. The task action passes
+`-ExecutionPolicy RemoteSigned` so the wrapper runs on Windows 10 and 11, whose
+default policy (`Restricted`) would otherwise refuse the script for the SYSTEM
+account. A Group Policy execution policy still wins over this process-scope
+setting. The wrapper returns the agent exit code, and installation stops if a
+task-state ACL cannot be applied. The task is allowed to start on battery.
 
 The synthetic installer check resets its exit status only after all assertions
 pass, including the expected child exit and ACL failure probes. A failed assertion
