@@ -29,6 +29,7 @@ _CSV_COLUMNS = (
 
 
 _CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+_MARKDOWN_ESCAPES = str.maketrans({char: f"&#{ord(char)};" for char in "\\`*_[]<>&|~"})
 
 
 def _csv_cell(value: object) -> object:
@@ -61,11 +62,17 @@ def findings_to_markdown(findings: list[dict[str, Any]]) -> str:
         technique = f.get("technique_id") or ""
         if f.get("technique_name"):
             technique = f"{technique} {f['technique_name']}".strip()
-        lines.append(
-            f"| {f.get('severity', '')} | {f.get('hostname', '')} "
-            f"| {f.get('title', '')} | {technique} "
-            f"| {f.get('status', '')} | {evidence} |"
+        cells = (
+            f.get("severity", ""),
+            f.get("hostname", ""),
+            f.get("title", ""),
+            technique,
+            f.get("status", ""),
+            evidence,
         )
+        # Entities remain text when Markdown is parsed; line breaks cannot split the row.
+        escaped = [" ".join(str(cell).splitlines()).translate(_MARKDOWN_ESCAPES) for cell in cells]
+        lines.append("| " + " | ".join(escaped) + " |")
     return "\n".join(lines) + "\n"
 
 

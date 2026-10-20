@@ -53,6 +53,8 @@ dashboard authentication and shows complete escaped evidence and matching-scan
 times. Invalid filter/page values return 422; absent findings return 404.
 Repeated evidence preserves operator status; changed evidence creates a new row. Authenticated CSV, Markdown, JSON, and
 Sentinel exports include all stored findings and are rendered in memory.
+Markdown cells encode markup and flatten line breaks. Its evidence preview is
+limited to 160 characters; JSON and Sentinel preserve complete evidence.
 
 ## Agent environment
 
