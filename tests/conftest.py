@@ -22,11 +22,11 @@ def backup_server_report() -> ScanReport:
     """A backup-server report that trips several rules."""
     return ScanReport(
         scan_time_utc=utc_now_iso(),
-        hostname="VBRSRV01",
-        fqdn="vbrsrv01.lab.local",
+        hostname="BACKUPSRV01",
+        fqdn="backupsrv01.lab.local",
         role=EndpointRole.BACKUP_SERVER,
         platform=PlatformInfo(system="Windows", release="2022"),
-        ip_addresses=["10.0.0.10"],
+        ip_addresses=["192.0.2.10"],
         listening_connections=[
             ListeningConnection(local_port=3389, status="LISTEN"),
         ],
