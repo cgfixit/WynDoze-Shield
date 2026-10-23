@@ -9,7 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
+from wyndoze_infoscanoverload.core import listeners
 from wyndoze_infoscanoverload.core.listeners import listener_evidence
 from wyndoze_infoscanoverload.core.models import (
     CollectionHealth,
@@ -424,12 +426,12 @@ rules:
                 WHEN NEW.rule_id = 'fail' BEGIN SELECT RAISE(ABORT, 'synthetic'); END""")
         after = report(200)
         failed = Finding(rule_id="fail", title="Synthetic", severity=Severity.INFO)
+        error = None
         try:
             self.store.record_scan(after, [finding(after), failed])
         except sqlite3.IntegrityError as exc:
-            assert str(exc) == "synthetic"
-        else:
-            self.fail("transaction should fail")
+            error = str(exc)
+        assert error == "synthetic"
         assert len(self.store.list_scans()) == 1
         assert self.store.get_finding(old["id"]) == old
 
@@ -440,3 +442,13 @@ rules:
         after = before.model_copy(deep=True)
         after.processes[0].exe = "/opt/server"
         assert key(before) != key(after)
+
+    def test_capped_ambiguous_inventory_does_not_expand_owners_per_socket(self):
+        scan = report()
+        scan.processes *= 5000
+        scan.listening_connections *= 5000
+        with patch.object(listeners, "_owner_context", wraps=listeners._owner_context) as owner:
+            result = finding(scan)
+        assert owner.call_count == 5000
+        assert not result.listener_identity.reusable
+        assert len(result.listener_identity.fingerprint) == 64

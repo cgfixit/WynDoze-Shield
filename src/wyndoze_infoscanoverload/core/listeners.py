@@ -71,6 +71,28 @@ def listener_owner_evidence(report: ScanReport, ports: Collection[int]) -> list[
     )
 
 
+def _owner_identities(report: ScanReport) -> dict[int, tuple[str, bool]]:
+    # Hash each owner group once. Re-expanding ambiguous owners per socket would
+    # multiply two 5000-row input caps into quadratic work and memory consumption.
+    groups: dict[int, list[ProcessInfo]] = defaultdict(list)
+    for process in report.processes:
+        if process.pid is not None:
+            groups[process.pid].append(process)
+    owners: dict[int, tuple[str, bool]] = {}
+    for pid, processes in groups.items():
+        contexts = [
+            _owner_context(process, report.platform.system.lower()) for process in processes
+        ]
+        complete = len(contexts) == 1 and contexts[0][1]
+        context = [
+            sorted(value for value, _ in contexts),
+            [] if complete else sorted(str(p.create_time) for p in processes),
+        ]
+        digest = hashlib.sha256(json.dumps(context, ensure_ascii=True).encode()).hexdigest()
+        owners[pid] = (digest, complete)
+    return owners
+
+
 def listener_identity(report: ScanReport, ports: Collection[int]) -> ListenerIdentity:
     """Fingerprint all matching sockets before display caps, not just the preview.
 
@@ -78,10 +100,7 @@ def listener_identity(report: ScanReport, ports: Collection[int]) -> ListenerIde
     permits cross-scan reuse. Unknown/partial context is scan-scoped: replay is
     stable, but a later scan must be reviewed. Metadata is not binary identity.
     """
-    owners: dict[int, list[ProcessInfo]] = defaultdict(list)
-    for process in report.processes:
-        if process.pid is not None:
-            owners[process.pid].append(process)
+    owners = _owner_identities(report)
     reusable = all(
         health.status == "ok" and not health.truncated
         for name, health in report.collection_health.items()
@@ -99,9 +118,9 @@ def listener_identity(report: ScanReport, ports: Collection[int]) -> ListenerIde
         except ValueError:
             address = conn.local_ip or ""
             reusable = False
-        processes = owners.get(conn.pid, []) if conn.pid is not None else []
-        contexts = [_owner_context(process, system) for process in processes]
-        owner_complete = len(contexts) == 1 and contexts[0][1]
+        owner, owner_complete = (
+            owners.get(conn.pid, ("unknown", False)) if conn.pid is not None else ("unknown", False)
+        )
         socket_complete = (
             conn.family in {"2", "10", "23", "AF_INET", "AF_INET6"}
             and conn.type in {"1", "2", "SOCK_STREAM", "SOCK_DGRAM"}
@@ -116,10 +135,9 @@ def listener_identity(report: ScanReport, ports: Collection[int]) -> ListenerIde
                     address,
                     conn.local_port,
                     conn.status,
-                    sorted(context for context, _ in contexts),
+                    owner,
                     # Missing ownership never silently becomes a trusted basename.
                     None if owner_complete else conn.pid,
-                    [] if owner_complete else sorted(str(p.create_time) for p in processes),
                 ],
                 ensure_ascii=True,
             )
