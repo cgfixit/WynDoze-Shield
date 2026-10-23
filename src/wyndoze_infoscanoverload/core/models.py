@@ -7,6 +7,8 @@ indexes stay strict.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Literal
@@ -208,6 +210,14 @@ class FindingStatus(StrEnum):
     SUPPRESSED = "suppressed"
 
 
+class ListenerIdentity(BaseModel):
+    """Server-derived listener context; never accepted from uploaded findings."""
+
+    ports: list[int] = Field(max_length=5000)
+    fingerprint: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    reusable: bool
+
+
 class Finding(BaseModel):
     """An authoritative detection produced by the server rules engine."""
 
@@ -223,6 +233,7 @@ class Finding(BaseModel):
     tactic: ShortStr | None = None
     technique_url: ShortStr | None = None
     evidence: list[ShortStr] = Field(default_factory=list, max_length=100)
+    listener_identity: ListenerIdentity | None = None
 
 
 def utc_now_iso() -> str:
@@ -232,6 +243,21 @@ def utc_now_iso() -> str:
 
 def dedupe_key(finding: Finding, hostname: str) -> str:
     """Stable identity for a finding on a host, used to dedupe across scans."""
+    if finding.listener_identity is not None:
+        # JSON framing avoids delimiter collisions. Risk/meaning changes never
+        # inherit a reviewed decision, even if the socket posture is unchanged.
+        context = [
+            hostname,
+            finding.rule_id,
+            finding.listener_identity.fingerprint,
+            finding.severity.value,
+            finding.category,
+            finding.title,
+            finding.message,
+            finding.technique_id,
+        ]
+        digest = hashlib.sha256(json.dumps(context, ensure_ascii=True).encode()).hexdigest()
+        return f"listener-v1:{digest}"
     joined = "|".join(sorted(finding.evidence)) if finding.evidence else finding.message
     return f"{hostname}::{finding.rule_id}::{joined}"
 

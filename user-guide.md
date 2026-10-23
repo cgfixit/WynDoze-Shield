@@ -190,15 +190,55 @@ or status; Next and Previous retain the selected filters. Page numbers start at 
 invalid page or filter values return HTTP 422. Click a finding title
 to see complete escaped evidence, first/last seen, occurrence count and the latest
 matching scan with separate collection/receipt times. Repeated identical evidence
-preserves review decisions, including Flagged. Changed evidence gets a separate
-finding. Empty results retain filter controls. All four export
+preserves review decisions, including Flagged. Listener findings use the more
+specific identity contract below; other changed evidence gets a separate finding.
+Empty results retain filter controls. All four export
 formats include the complete stored finding set, including archived and suppressed
 rows, regardless of the current filters. Full exports are rendered in memory and can be large on a busy dashboard.
 
-Listener evidence includes bind address/scope, PID and process name when available.
-Loopback-only findings are informational; RDP emits one finding with role priority.
-A socket does not establish internet reachability or a bind shell. Identical evidence
-preserves analyst decisions; changed ownership/PID creates new triage evidence.
+Listener evidence includes bind address/scope, PID, process name and bounded
+executable/account details when available. Loopback-only findings are informational;
+RDP emits one finding with role priority. A socket does not establish internet
+reachability or a bind shell.
+
+Listener identity is separate from that display evidence. The full matching socket
+set (including multiplicity, address, family, type, port and status), observed owner
+name, absolute executable path, account and command-pattern labels determine the
+condition. Platform, endpoint role, severity and rule meaning also participate.
+IP spelling is normalized; path case is preserved even on Windows. PID and process
+creation time can change without reopening a complete, unchanged condition. The
+same row keeps its decision, first-seen time and occurrence count while refreshing
+PID evidence and the matching scan reference. Earlier raw scans remain stored.
+New owners (including the same basename at a different path), additional bindings,
+protocol/scope changes and increased risk receive a separate triage row.
+
+Cross-scan reuse requires one unambiguous process row per listener, nonempty name
+and account, an absolute executable path, valid IP and nonempty socket metadata.
+Fields at the 512-character collection cap are treated as potentially truncated.
+Missing/ambiguous owners, unknown platform or explicitly partial process/socket
+coverage cannot inherit decisions across different collection timestamps. Replaying
+the same report still preserves its decision. Old agents without health metadata
+can reuse decisions only when the required observed fields are complete. Missing
+listeners never automatically resolve earlier findings. Metadata does not prove
+binary identity or trust: replacing a file in place with unchanged observed metadata
+cannot be detected by this mechanism. No file hashing or new collection is added.
+
+On the first matching ingest after upgrade, a legacy decision transfers only when
+there is exactly one old row for that host/rule, it has one occurrence, and its
+retained scan reconstructs the same complete identity, risk assessment and uncapped
+old evidence. The row ID, decision and first-seen time survive. Repeated legacy
+occurrences overwrote the scan reference without tracking the reviewed owner;
+duplicates, truncated evidence, corrupt/missing scans and incomplete context therefore
+keep their old decisions separately and generate fresh triage. There is no bulk
+merge, deletion or automatic suppression. Review/archive those historical rows as
+appropriate. Migration and scan ingestion share one transaction.
+
+Back up the SQLite database before upgrading. Reverting the code leaves the database
+readable, but the old server will create legacy-key rows alongside migrated ones.
+Restore a pre-upgrade backup for an exact rollback (losing subsequent scans/decisions);
+do not mix old and new writers against one database. Synthetic regressions establish
+these identity/storage behaviors, not native Windows acceptance or production alert
+precision. Display caps still apply; identity includes sockets beyond the preview.
 
 ## Check collection health
 

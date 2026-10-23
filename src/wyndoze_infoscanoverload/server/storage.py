@@ -9,8 +9,8 @@ Three tables:
     full raw JSON for drill-down.
 ``findings``
     One row per authoritative finding produced by the rules engine, carrying
-    the triage lifecycle status. Deduplicated per (host, rule, evidence) so a
-    recurring condition does not spam the triage inbox.
+    the triage lifecycle status. Listener identity separates socket/owner posture
+    from PID evidence; other rules retain (host, rule, evidence) deduplication.
 
 SQLite stores local inventory and triage state. Capacity depends on inventory
 volume, retention, and the host; no endpoint-count guarantee is implied.
@@ -28,6 +28,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from wyndoze_infoscanoverload.core.listeners import listener_evidence, listener_identity
 from wyndoze_infoscanoverload.core.models import (
     Finding,
     FindingStatus,
@@ -90,6 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_scans_hostname ON scans(hostname);
 CREATE INDEX IF NOT EXISTS idx_scans_received ON scans(received_at_utc);
 CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
 CREATE INDEX IF NOT EXISTS idx_findings_hostname ON findings(hostname);
+CREATE INDEX IF NOT EXISTS idx_findings_host_rule ON findings(hostname, rule_id);
 """
 
 _VALID_STATUS = {s.value for s in FindingStatus}
@@ -232,7 +234,9 @@ class Storage:
         now: str,
     ) -> None:
         key = dedupe_key(finding, hostname)
-        # Repeated evidence preserves the analyst decision; changed evidence gets a new key.
+        if finding.listener_identity is not None:
+            Storage._adopt_legacy_listener(conn, hostname, finding, key)
+        # Identical posture preserves the decision while refreshing PID evidence.
         conn.execute(
             """
             INSERT INTO findings (
@@ -246,6 +250,7 @@ class Storage:
                 last_seen_utc=excluded.last_seen_utc,
                 seen_count=findings.seen_count + 1,
                 severity=excluded.severity,
+                evidence_json=excluded.evidence_json,
                 status=findings.status
             """,
             (
@@ -267,6 +272,59 @@ class Storage:
                 now,
             ),
         )
+
+    @staticmethod
+    def _adopt_legacy_listener(
+        conn: sqlite3.Connection, hostname: str, finding: Finding, key: str
+    ) -> None:
+        """Lazily rekey only one provably equivalent, unambiguous legacy row.
+
+        No bulk merge or deletion. Older upserts replaced scan_id without tracking
+        ownership; after multiple occurrences the reviewed owner is unknowable.
+        Such histories, duplicate rows, incomplete/truncated evidence and corrupt
+        or missing scans retain their decisions separately and require fresh triage.
+        """
+        identity = finding.listener_identity
+        if (
+            identity is None
+            or not identity.reusable
+            or conn.execute("SELECT 1 FROM findings WHERE dedupe_key = ?", (key,)).fetchone()
+        ):
+            return
+        # Bound candidate work before loading any potentially large scan JSON.
+        candidates = conn.execute(
+            """SELECT * FROM findings WHERE hostname = ? AND rule_id = ?
+               AND dedupe_key NOT LIKE 'listener-v1:%' ORDER BY id LIMIT 2""",
+            (hostname, finding.rule_id),
+        ).fetchall()
+        if len(candidates) != 1 or candidates[0]["seen_count"] != 1:
+            return
+        row = candidates[0]
+        scan = conn.execute(
+            """SELECT raw_json FROM scans WHERE id = ? AND hostname = ?
+               AND length(CAST(raw_json AS BLOB)) <= 8388608""",
+            (row["scan_id"], hostname),
+        ).fetchone()
+        if scan is None:
+            return
+        try:
+            report = ScanReport.model_validate_json(scan["raw_json"])
+            old = Finding.model_validate(
+                {**dict(row), "evidence": json.loads(row["evidence_json"])}
+            )
+        except (ValueError, TypeError):
+            return
+        # Exact uncapped evidence equality rejects old preview-only decisions.
+        if (
+            report.hostname != hostname
+            or dedupe_key(old, hostname) != row["dedupe_key"]
+            or sorted(old.evidence) != listener_evidence(report, identity.ports)
+        ):
+            return
+        old.listener_identity = listener_identity(report, identity.ports)
+        if not old.listener_identity.reusable or dedupe_key(old, hostname) != key:
+            return
+        conn.execute("UPDATE findings SET dedupe_key = ? WHERE id = ?", (key, row["id"]))
 
     # -- reads -------------------------------------------------------------
     def list_scans_public(self, limit: int = 100) -> list[dict[str, Any]]:

@@ -60,6 +60,11 @@
   allowlisted local return paths. Preserve page/host/rule filters after actions.
   `active` means triage or flagged and is never a stored status. Identical
   evidence increments occurrences without resetting any analyst decision.
+  Listener identity is versioned separately from PID evidence: complete unchanged
+  socket/owner posture preserves decisions across restarts, while changed risk,
+  owner or bindings requires review. Incomplete ownership is scan-scoped. Legacy
+  decisions migrate only from one verifiable single-occurrence row; ambiguous
+  histories remain intact. See `user-guide.md` for the migration contract.
 - `server/present.py` converts raw scans to display facts. Render counts and
   allowed pattern names, never raw scan JSON or encrypted command-line tokens.
   Endpoints show collection age separately from receipt age and retain unknown

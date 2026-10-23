@@ -64,7 +64,9 @@ Finding lists use 50-row pages with stable severity/time/ID ordering. Optional
 Actions retain the current filters and page. `/findings/{id}` requires
 dashboard authentication and shows complete escaped evidence and matching-scan
 times. Invalid filter/page values return 422; absent findings return 404.
-Repeated evidence preserves operator status; changed evidence creates a new row. Authenticated CSV, Markdown, JSON, and
+Repeated evidence preserves operator status; listener findings instead use versioned
+socket/owner identity and refresh PID evidence. Material changes create a new row.
+Authenticated CSV, Markdown, JSON, and
 Sentinel exports include all stored findings and are rendered in memory.
 Markdown cells encode markup and flatten line breaks. Its evidence preview is
 limited to 160 characters; JSON and Sentinel preserve complete evidence.
@@ -144,11 +146,19 @@ Missing-service checks skip explicitly incomplete service inventories.
 
 Windows software comes from `reg.exe` with `/reg:64` and `/reg:32`, decoded as OEM text. Local administrators come from `Get-LocalGroupMember -SID S-1-5-32-544`. Service rows use the service name, display name, and status. Process command lines stay empty unless `--cmdline` or `RECON_AGENT_CMDLINE=1` is set. That mode requires `RECON_AGENT_ENCRYPTION_KEY`. The stored value is a Fernet token. Pattern names such as `encoded-powershell` are stored separately so the server can score them without the key.
 
-Listener evidence retains address, scope, PID and observed process name. Loopback-only
+Listener evidence retains address, scope, PID, observed name and bounded path/account
+details. Identity hashes all matching sockets before the 100-item display cap,
+including family/type/status, normalized IP, port, owner name/path/account, command
+pattern labels, platform/role and rule assessment. PID/create-time changes alone
+preserve decisions only for complete, unambiguous metadata; unknown or explicitly
+partial coverage is scoped to the report's collection timestamp. Loopback-only
 severity is info; mixed bindings keep the higher assessment. RDP has one role-adjusted
 rule. A local listener does not establish external reachability or protocol identity.
-Changed PID/owner evidence can create a fresh triage row; identical evidence retains
-the analyst decision.
+Changed owner, binding or risk creates fresh triage. Legacy migration rekeys only
+one single-occurrence row with an intact scan and exactly matching uncapped old
+evidence/context. Multiple occurrences/rows or missing metadata keep prior decisions
+separate and require a new review. No historical rows are merged or removed; no
+finding resolves from missing data. See `user-guide.md` for limitations and rollback.
 
 ## Not in this tree
 

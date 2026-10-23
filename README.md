@@ -50,8 +50,10 @@ to a terminated demo session.
   dashboard filters.
 - **Findings** carry a lifecycle: `triage → flagged / archived / suppressed`.
   Recurring identical evidence on the same host and rule increments an
-  occurrence count and preserves the analyst's decision; changed evidence opens
-  a separate finding.
+  occurrence count and preserves the analyst's decision. Listener findings use
+  complete socket/owner context separately from PID evidence, so a restart alone
+  does not reopen a reviewed condition. Material changes require fresh triage;
+  incomplete ownership stays scan-scoped. See the [migration contract](user-guide.md#work-the-inbox).
 - **Collection health** travels with each report: per-collector status, item
   counts, truncation, and safe issue categories. The Endpoints page shows that
   coverage separately from collection age and receipt time, so a successful
