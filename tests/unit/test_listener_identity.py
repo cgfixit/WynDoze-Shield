@@ -90,7 +90,8 @@ class TestListenerIdentity(TestCase):
         result.listener_identity = None
         self.store.record_scan(scan, [result])
         row = next(
-            r for r in self.store.list_findings()
+            r
+            for r in self.store.list_findings()
             if r["dedupe_key"] == dedupe_key(result, scan.hostname)
         )
         self.store.set_finding_status(row["id"], status)
