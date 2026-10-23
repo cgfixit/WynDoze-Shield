@@ -125,7 +125,9 @@ def listener_identity(report: ScanReport, ports: Collection[int]) -> ListenerIde
             )
         )
     # Preserve multiplicity: a second owner instance/socket is a changed posture.
-    context = [system, report.role.value, sorted(sockets), None if reusable else report.scan_time_utc]
+    context = [
+        system, report.role.value, sorted(sockets), None if reusable else report.scan_time_utc
+    ]
     fingerprint = hashlib.sha256(json.dumps(context, ensure_ascii=True).encode()).hexdigest()
     return ListenerIdentity(
         ports=sorted(matched_ports), fingerprint=fingerprint, reusable=reusable and bool(sockets)

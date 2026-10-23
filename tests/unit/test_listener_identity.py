@@ -426,8 +426,8 @@ rules:
         failed = Finding(rule_id="fail", title="Synthetic", severity=Severity.INFO)
         try:
             self.store.record_scan(after, [finding(after), failed])
-        except sqlite3.IntegrityError:
-            pass
+        except sqlite3.IntegrityError as exc:
+            assert str(exc) == "synthetic"
         else:
             self.fail("transaction should fail")
         assert len(self.store.list_scans()) == 1

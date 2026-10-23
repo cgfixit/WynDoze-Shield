@@ -285,9 +285,11 @@ class Storage:
         or missing scans retain their decisions separately and require fresh triage.
         """
         identity = finding.listener_identity
-        if identity is None or not identity.reusable:
-            return
-        if conn.execute("SELECT 1 FROM findings WHERE dedupe_key = ?", (key,)).fetchone():
+        if (
+            identity is None
+            or not identity.reusable
+            or conn.execute("SELECT 1 FROM findings WHERE dedupe_key = ?", (key,)).fetchone()
+        ):
             return
         # Bound candidate work before loading any potentially large scan JSON.
         candidates = conn.execute(
@@ -312,10 +314,12 @@ class Storage:
             )
         except (ValueError, TypeError):
             return
-        if report.hostname != hostname or dedupe_key(old, hostname) != row["dedupe_key"]:
-            return
         # Exact uncapped evidence equality rejects old preview-only decisions.
-        if sorted(old.evidence) != listener_evidence(report, identity.ports):
+        if (
+            report.hostname != hostname
+            or dedupe_key(old, hostname) != row["dedupe_key"]
+            or sorted(old.evidence) != listener_evidence(report, identity.ports)
+        ):
             return
         old.listener_identity = listener_identity(report, identity.ports)
         if not old.listener_identity.reusable or dedupe_key(old, hostname) != key:
